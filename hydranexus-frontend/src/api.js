@@ -2,7 +2,22 @@
 // Tries FastAPI at VITE_API_URL, falls back to mock src/data.js when unreachable.
 // Keeps human-in-the-loop: all AI results are advisory with confidence + evidence.
 
-const BASE = (import.meta?.env?.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+// Resolve backend base URL. Priority:
+// 1. VITE_API_URL (explicit, e.g. http://127.0.0.1:8000)
+// 2. Same hostname as the page on port 8000 (avoids Windows localhost→::1
+//    IPv6 mismatch when the backend is bound to 127.0.0.1)
+// 3. http://localhost:8000 fallback
+function resolveBase() {
+  const fromEnv = import.meta?.env?.VITE_API_URL
+  if (fromEnv) return fromEnv.replace(/\/$/, '')
+  try {
+    const host = window?.location?.hostname
+    if (host) return `http://${host}:8000`
+  } catch { /* non-browser (SSR/tests) -> fallback below */ }
+  return 'http://localhost:8000'
+}
+
+const BASE = resolveBase()
 
 async function fetchJson(path, options = {}, timeoutMs = 4000) {
   const ctrl = new AbortController()
@@ -19,12 +34,16 @@ async function fetchJson(path, options = {}, timeoutMs = 4000) {
 export const apiBase = BASE
 
 export async function checkHealth() {
-  try {
-    const j = await fetchJson('/api/health', {}, 2500)
-    return { online: true, info: j }
-  } catch {
-    return { online: false, info: null }
+  // Retry once: the backend's first request can be slow (model warmup).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const j = await fetchJson('/api/health', {}, 8000)
+      return { online: true, info: j }
+    } catch {
+      if (attempt === 1) return { online: false, info: null }
+    }
   }
+  return { online: false, info: null }
 }
 
 export async function fetchTelemetry(scenario = 'normal', points = 8) {
