@@ -8,6 +8,7 @@ import SectionTitle from './components/SectionTitle'
 import NetworkMap from './components/NetworkMap'
 import TelemetryCharts from './components/TelemetryCharts'
 import { zones, incidents, normalTelemetry, leakTelemetry, burstTelemetry, demandTelemetry, sensorTelemetry, whatIfOptions, systemMetrics } from './data'
+import { checkHealth, fetchTelemetry, postVerify } from './api'
 
 const pageMeta = {
   overview: ['Command Center', 'A calm, operator-first view of network health and incidents.'],
@@ -90,8 +91,16 @@ function NetworkPage({ active }) {
 
 function MonitoringPage({ scenario, setScenario }) {
   const [search, setSearch] = useState('')
+  const [live, setLive] = useState(null)
+  const [source, setSource] = useState('mock')
+  useEffect(() => {
+    let cancelled = false
+    setLive(null)
+    fetchTelemetry(scenario, 8).then(d => { if (!cancelled) { setLive(d); setSource('live API') } }).catch(() => { if (!cancelled) setSource('mock') })
+    return () => { cancelled = true }
+  }, [scenario])
   const telemetry = { normal: normalTelemetry, leak: leakTelemetry, burst: burstTelemetry, demand: demandTelemetry, sensor: sensorTelemetry }
-  const data = telemetry[scenario]
+  const data = live || telemetry[scenario]
   const last = data.at(-1)
 
   const filteredData = useMemo(() => {
@@ -158,7 +167,9 @@ function HistoryPage({ setPage }) {
 function SettingsPage() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [notify, setNotify] = useState(true)
-  return <div className="space-y-5"><SectionTitle eyebrow="Prototype" title="Settings" description="Keep the hackathon environment transparent and simple." /><div className="grid gap-5 lg:grid-cols-2"><Panel title="Operator preferences"><div className="space-y-3">{[[autoRefresh, setAutoRefresh, 'Auto-refresh telemetry', 'Refresh simulated readings in the dashboard'], [notify, setNotify, 'Incident notifications', 'Show visual alerts for new anomalies']].map(([value, setter, title, desc]) => <label key={title} className="flex cursor-pointer items-center justify-between rounded-2xl border border-white/80 bg-white/60 p-4"><div><div className="font-semibold text-slate-800">{title}</div><div className="mt-1 text-sm text-slate-500">{desc}</div></div><input type="checkbox" checked={value} onChange={e => setter(e.target.checked)} className="h-5 w-5 accent-sky-500" /></label>)}</div></Panel><Panel title="Environment"><div className="space-y-2">{[['Data source', 'Simulated telemetry'], ['Analytics', 'Hybrid ML + rules (prototype)'], ['Network model', 'NetworkX topology'], ['Simulation', 'Mock scenario engine'], ['Deployment', 'React + Vite']].map(([a,b]) => <div key={a} className="flex items-center justify-between rounded-xl border border-white/70 bg-white/55 px-4 py-3 text-sm"><span className="text-slate-500">{a}</span><span className="font-semibold text-slate-700">{b}</span></div>)}</div></Panel></div></div>
+  const [backend, setBackend] = useState({ online: false, checked: false })
+  useEffect(() => { checkHealth().then(r => setBackend({ online: r.online, checked: true })).catch(() => setBackend({ online: false, checked: true })) }, [])
+  return <div className="space-y-5"><SectionTitle eyebrow="Prototype" title="Settings" description="Keep the hackathon environment transparent and simple." /><div className="grid gap-5 lg:grid-cols-2"><Panel title="Operator preferences"><div className="space-y-3">{[[autoRefresh, setAutoRefresh, 'Auto-refresh telemetry', 'Refresh simulated readings in the dashboard'], [notify, setNotify, 'Incident notifications', 'Show visual alerts for new anomalies']].map(([value, setter, title, desc]) => <label key={title} className="flex cursor-pointer items-center justify-between rounded-2xl border border-white/80 bg-white/60 p-4"><div><div className="font-semibold text-slate-800">{title}</div><div className="mt-1 text-sm text-slate-500">{desc}</div></div><input type="checkbox" checked={value} onChange={e => setter(e.target.checked)} className="h-5 w-5 accent-sky-500" /></label>)}</div></Panel><Panel title="Environment"><div className="space-y-2">{[['Data source', backend.checked ? (backend.online ? 'Live API (with mock fallback)' : 'Mock telemetry (API offline)') : 'Checking backend...'], ['Analytics', 'Hybrid ML + rules (prototype)'], ['Network model', 'NetworkX topology'], ['Simulation', 'FastAPI scenario engine'], ['Deployment', 'React + Vite']].map(([a,b]) => <div key={a} className="flex items-center justify-between rounded-xl border border-white/70 bg-white/55 px-4 py-3 text-sm"><span className="text-slate-500">{a}</span><span className="font-semibold text-slate-700">{b}</span></div>)}</div><div className="mt-3 text-xs text-slate-500">Backend: {backend.checked ? (backend.online ? '● online' : '○ offline — using mock data') : 'checking...'}</div></Panel></div></div>
 }
 
 export default function App() {
@@ -182,6 +193,15 @@ export default function App() {
     })
   }
 
+  const doVerify = async () => {
+    setVerified(true)
+    try {
+      const res = await postVerify(data, scenario === 'normal' ? 'leak' : scenario, 'B2 → B3')
+      setToast({ message: `Scenario verification: ${res.matchScore}% (${res.evidenceStrength})`, type: res.verified ? 'success' : 'info' })
+    } catch {
+      setToast({ message: 'Scenario verified against local mock model.', type: 'success' })
+    }
+  }
   const exportReport = () => {
     const report = {
       timestamp: new Date().toISOString(),
@@ -204,7 +224,7 @@ export default function App() {
     if (page === 'overview') return <Overview active={active} data={data} setPage={setPage} trigger={trigger} onExport={exportReport} />
     if (page === 'network') return <NetworkPage active={active} />
     if (page === 'monitoring') return <MonitoringPage scenario={scenario} setScenario={s => { setScenario(s); setActive(s === 'leak') }} />
-    if (page === 'incident') return <InvestigationPage active={active} verify={() => setVerified(true)} verified={verified} onExport={exportReport} />
+    if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} onExport={exportReport} />
     if (page === 'impact') return <ImpactPage active={active} />
     if (page === 'whatif') return <WhatIfPage active={active} />
     if (page === 'history') return <HistoryPage setPage={setPage} />
