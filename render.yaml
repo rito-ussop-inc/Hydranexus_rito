@@ -1,0 +1,17 @@
+# Render Blueprint for the HydraNexus FastAPI backend.
+# Dashboard path: Render → New → Blueprint → select this repo.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: hydranexus-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Render injects $PORT (defaults to 10000). Must bind 0.0.0.0, NOT 127.0.0.1.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      # Render-supported Python; the code needs 3.10+ (X | Y annotations).
+      - key: PYTHON_VERSION
+        value: 3.12.7
