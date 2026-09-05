@@ -1,3 +1,39 @@
+import { Menu, Play, RotateCcw } from 'lucide-react'
+import { Button } from './ui/button'
+import { Badge } from './ui/badge'
+
 export default function PageHeader({ title, subtitle, onMenu, onTrigger, incidentActive }) {
-  return <header className="sticky top-0 z-30 border-b border-white/80 bg-[#eef9ff]/80 backdrop-blur-xl"><div className="mx-auto flex max-w-[1540px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8"><div className="flex min-w-0 items-center gap-3"><button onClick={onMenu} className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/80 bg-white/70 text-lg text-slate-600 shadow-sm lg:hidden">☰</button><div className="min-w-0"><h1 className="truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{title}</h1><p className="truncate text-xs text-slate-500 sm:text-sm">{subtitle}</p></div></div><div className="flex shrink-0 items-center gap-2"><div className={`hidden items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold sm:flex ${incidentActive ? 'border-rose-200 bg-rose-50 text-rose-600' : 'border-emerald-200 bg-emerald-50 text-emerald-600'}`}><span className={`h-2 w-2 rounded-full ${incidentActive ? 'bg-rose-400' : 'bg-emerald-400'}`} />{incidentActive ? 'Incident active' : 'All systems normal'}</div><button onClick={onTrigger} className={`rounded-xl px-3 py-2.5 text-xs font-bold transition ${incidentActive ? 'border border-white bg-white/80 text-slate-700 hover:bg-white' : 'bg-sky-500 text-white shadow-[0_10px_26px_rgba(14,165,233,.22)] hover:bg-sky-400'}`}>{incidentActive ? 'Resolve demo' : 'Trigger demo'}</button></div></div></header>
+  return (
+    <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Button variant="ghost" size="icon" onClick={onMenu} className="lg:hidden" aria-label="Open navigation">
+            <Menu className="h-4 w-4" />
+          </Button>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
+            {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {incidentActive ? (
+            <Badge variant="destructive">Incident active</Badge>
+          ) : (
+            <Badge variant="secondary">All systems normal</Badge>
+          )}
+          <Button size="sm" variant={incidentActive ? 'outline' : 'default'} onClick={onTrigger}>
+            {incidentActive ? (
+              <>
+                <RotateCcw /> Resolve demo
+              </>
+            ) : (
+              <>
+                <Play /> Trigger demo
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </header>
+  )
 }

@@ -1,32 +1,25 @@
-# HydraNexus Frontend MVP
+# HydraNexus Frontend
 
-Glassmorphism, light-sky-blue operator dashboard for the HydraNexus water infrastructure decision-intelligence hackathon prototype.
+Minimalist operator dashboard built with React + Vite + Tailwind CSS + shadcn/ui
+patterns (`src/components/ui`: button, card, badge, input, separator, table),
+Lucide icons, React Flow network map and Recharts telemetry.
 
-## Includes
-- Command Center
-- Network Map
-- Telemetry
-- Investigation
-- Impact Assessment
-- What-If Studio
-- Incident History
-- Settings
-- Mock leak/burst/demand/sensor scenarios
-- React Flow network visualization
-- Recharts telemetry charts
-- Backend-ready page structure
+Pages: Overview · Network · Telemetry · Investigation · Impact · What-If ·
+History · Settings. Demo mode — simulated data, no live sensors connected.
 
 ## Run
 
 ```bash
 npm install
+copy .env.example .env   # set VITE_API_URL=http://127.0.0.1:8000
 npm run dev
 ```
+
+Backend client (`src/api.js`) uses the FastAPI backend when reachable and
+falls back to mock `src/data.js` otherwise.
 
 ## Production build
 
 ```bash
 npm run build
 ```
-
-The current data is intentionally simulated. Replace API/mock state in `src/data.js` and the relevant page actions when connecting FastAPI + ML + NetworkX later.

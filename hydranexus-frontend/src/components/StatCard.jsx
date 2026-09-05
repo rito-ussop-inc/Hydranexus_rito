@@ -1,4 +1,0 @@
-export default function StatCard({ label, value, helper, tone = 'normal', icon }) {
-  const accent = { normal: 'bg-emerald-100 text-emerald-600', info: 'bg-sky-100 text-sky-600', warning: 'bg-amber-100 text-amber-600', danger: 'bg-rose-100 text-rose-600' }[tone]
-  return <div className="rounded-[22px] border border-white/85 bg-white/60 p-4 shadow-[0_12px_32px_rgba(56,189,248,.07)] backdrop-blur-xl"><div className="flex items-start justify-between gap-3"><div><div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{label}</div><div className="mt-2 text-xl font-extrabold tracking-tight text-slate-900">{value}</div></div><div className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-lg font-bold ${accent}`}>{icon}</div></div><div className="mt-3 text-xs leading-5 text-slate-500">{helper}</div></div>
-}

@@ -1,176 +1,710 @@
 import { useMemo, useState, useEffect } from 'react'
+import { CheckCircle2, AlertTriangle, Download, Play, X } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import PageHeader from './components/PageHeader'
-import Badge from './components/Badge'
-import Panel from './components/Panel'
-import StatCard from './components/StatCard'
-import SectionTitle from './components/SectionTitle'
 import NetworkMap from './components/NetworkMap'
 import TelemetryCharts from './components/TelemetryCharts'
-import { zones, incidents, normalTelemetry, leakTelemetry, burstTelemetry, demandTelemetry, sensorTelemetry, whatIfOptions, systemMetrics } from './data'
+import { Button } from './components/ui/button'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './components/ui/card'
+import { Badge } from './components/ui/badge'
+import { Input } from './components/ui/input'
+import { Separator } from './components/ui/separator'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './components/ui/table'
+import {
+  zones,
+  incidents,
+  normalTelemetry,
+  leakTelemetry,
+  burstTelemetry,
+  demandTelemetry,
+  sensorTelemetry,
+  whatIfOptions,
+} from './data'
 import { checkHealth, fetchTelemetry, postVerify } from './api'
 
 const pageMeta = {
-  overview: ['Command Center', 'A calm, operator-first view of network health and incidents.'],
-  network: ['Network Map', 'Understand topology, zones and the probable fault location.'],
-  monitoring: ['Telemetry', 'Explore flow, pressure and consumption behavior.'],
-  incident: ['Investigation', 'Turn the active alert into an evidence-backed hypothesis.'],
-  impact: ['Impact Assessment', 'Estimate water loss, exposure and operational severity.'],
-  whatif: ['What-If Studio', 'Compare possible interventions before acting.'],
-  history: ['Incident History', 'Review resolved and active events across the network.'],
+  overview: ['Overview', 'Network health and active incidents.'],
+  network: ['Network', 'Topology, zones and the suspected fault location.'],
+  monitoring: ['Telemetry', 'Flow, pressure and consumption. Simulated feed.'],
+  incident: ['Investigation', 'Evidence behind the current hypothesis.'],
+  impact: ['Impact', 'Estimated loss, exposure and severity.'],
+  whatif: ['What-If', 'Compare interventions before acting.'],
+  history: ['History', 'Active and resolved events.'],
   settings: ['Settings', 'Prototype controls and data environment.'],
 }
 
 const fmt = (value) => Number(value).toLocaleString()
 
-function AppButton({ children, onClick, variant = 'primary', className = '', type = 'button' }) {
-  const styles = {
-    primary: 'bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-[0_12px_32px_rgba(14,165,233,.28)] hover:from-sky-400 hover:to-cyan-400 active:scale-[0.98]',
-    soft: 'bg-white/80 text-slate-700 border border-white/90 shadow-sm hover:bg-white active:scale-[0.98]',
-    dark: 'bg-slate-900 text-white shadow-md hover:bg-slate-800 active:scale-[0.98]',
-    ghost: 'bg-transparent text-slate-600 hover:bg-white/60',
-    danger: 'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-[0_12px_32px_rgba(244,63,94,.28)] hover:from-rose-400 hover:to-pink-400 active:scale-[0.98]',
-  }
-  return <button type={type} onClick={onClick} className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${styles[variant]} ${className}`}>{children}</button>
-}
-
-function Metric({ label, value, hint, tone = 'default' }) {
-  const toneClass = tone === 'danger' ? 'text-rose-600' : tone === 'warning' ? 'text-amber-600' : tone === 'success' ? 'text-emerald-600' : 'text-slate-900'
-  return <div className="rounded-2xl border border-white/85 bg-white/70 p-4 shadow-[0_8px_28px_rgba(56,189,248,.06)] backdrop-blur-md transition-all hover:border-white"><div className="text-[11px] font-bold uppercase tracking-[0.13em] text-slate-400">{label}</div><div className={`mt-2 text-2xl font-black ${toneClass}`}>{value}</div>{hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}</div>
-}
-
-function Toast({ message, type = 'info', onClose }) {
-  if (!message) return null
-  const colors = type === 'danger' ? 'border-rose-300 bg-rose-500 text-white shadow-rose-500/20' : 'border-emerald-300 bg-emerald-600 text-white shadow-emerald-500/20'
+function PageSection({ eyebrow, title, description, action, children }) {
   return (
-    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-4 ${colors}`}>
-      <span>{type === 'danger' ? '⚠️' : '✅'}</span>
-      <span>{message}</span>
-      <button onClick={onClose} className="ml-2 opacity-80 hover:opacity-100">✕</button>
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          {eyebrow && <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{eyebrow}</p>}
+          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+          {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function Stat({ label, value, hint, alert = false }) {
+  return (
+    <Card>
+      <CardContent className="pt-5">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className={`mt-1 text-2xl font-semibold tracking-tight ${alert ? 'text-destructive' : ''}`}>{value}</p>
+        {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+      </CardContent>
+    </Card>
+  )
+}
+
+function Toast({ toast, onClose }) {
+  if (!toast) return null
+  return (
+    <div className="fixed right-4 top-4 z-50 flex max-w-sm items-start gap-2 rounded-md border bg-background p-3 shadow-md">
+      {toast.type === 'danger' ? (
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+      ) : (
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+      )}
+      <p className="text-sm">{toast.message}</p>
+      <button onClick={onClose} className="rounded p-0.5 text-muted-foreground hover:bg-accent" aria-label="Dismiss">
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   )
 }
 
+/* ------------------------------- Overview ------------------------------- */
+
 function Overview({ active, data, setPage, trigger, onExport }) {
-  const metric = active ? systemMetrics.network : systemMetrics.normal
-  return <div className="space-y-6">
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-      <StatCard label="Network status" value={metric.status} helper={active ? 'Investigation in progress' : 'Within baseline'} tone={active ? 'warning' : 'normal'} icon="◉" />
-      <StatCard label="Current flow" value={`${fmt(metric.flow)} L/hr`} helper="Baseline ≈ 8,000 L/hr" tone={active ? 'danger' : 'info'} icon="↗" />
-      <StatCard label="Average pressure" value={`${metric.avgPressure.toFixed(1)} bar`} helper="Baseline ≈ 4.0 bar" tone={active ? 'warning' : 'info'} icon="◌" />
-      <StatCard label="Estimated loss" value={`${fmt(metric.loss)} L/hr`} helper={active ? 'Potential leak loss' : 'No active loss'} tone={active ? 'danger' : 'normal'} icon="≈" />
-      <StatCard label="Active anomalies" value={metric.anomalies} helper={active ? '1 high-severity incident' : 'All clear'} tone={active ? 'danger' : 'normal'} icon="!" />
+  const flow = active ? 11500 : 8180
+  const pressure = active ? 3.3 : 4.0
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label="Status" value={active ? 'Investigating' : 'Normal'} hint={active ? '1 high-severity incident' : 'Within baseline'} alert={active} />
+        <Stat label="Flow" value={`${fmt(flow)} L/hr`} hint="Baseline ≈ 8,000 L/hr" alert={active} />
+        <Stat label="Avg. pressure" value={`${pressure.toFixed(1)} bar`} hint="Baseline ≈ 4.0 bar" alert={active} />
+        <Stat label="Est. loss" value={active ? '3,500 L/hr' : '0 L/hr'} hint={active ? 'Potential leak' : 'No active loss'} alert={active} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="text-sm font-medium">Network</CardTitle>
+              <CardDescription>Simulated topology</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setPage('network')}>
+              Open map
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <NetworkMap incidentActive={active} compact onSelectSegment={() => setPage('network')} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">{active ? 'Active incident' : 'No active incident'}</CardTitle>
+            <CardDescription>{active ? 'B2 → B3 · Zone B · INC-1048' : 'System nominal'}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {active ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Probable pipeline leak</span>
+                  <Badge variant="destructive">High</Badge>
+                </div>
+                <Separator />
+                <dl className="space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Confidence</dt>
+                    <dd className="font-medium">76%</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Est. loss</dt>
+                    <dd className="font-medium">3,500 L/hr</dd>
+                  </div>
+                </dl>
+                <div className="flex gap-2 pt-1">
+                  <Button size="sm" onClick={() => setPage('incident')}>
+                    Investigate
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setPage('whatif')}>
+                    What-if
+                  </Button>
+                </div>
+                <Button size="sm" variant="ghost" onClick={onExport}>
+                  <Download /> Export report
+                </Button>
+              </>
+            ) : (
+              <div className="flex flex-col items-center py-6 text-center">
+                <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+                <p className="mt-2 text-sm font-medium">Network looks healthy</p>
+                <p className="mt-1 text-xs text-muted-foreground">Inject a controlled incident to test the workflow.</p>
+                <Button size="sm" className="mt-3" onClick={trigger}>
+                  <Play /> Trigger simulated leak
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <PageSection eyebrow="Telemetry" title="Network pulse" description="Simulated feed with anomaly scoring.">
+        <TelemetryCharts data={data} />
+      </PageSection>
+
+      <PageSection eyebrow="Zones" title="Zone health">
+        <div className="grid gap-3 md:grid-cols-3">
+          {zones.map((zone) => {
+            const critical = active && zone.id === 'B'
+            return (
+              <Card key={zone.id}>
+                <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">{zone.name}</CardTitle>
+                  {critical ? <Badge variant="destructive">Critical</Badge> : <Badge variant="secondary">Normal</Badge>}
+                </CardHeader>
+                <CardContent>
+                  <dl className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <dt className="text-xs text-muted-foreground">Demand</dt>
+                      <dd className="font-medium">{fmt(zone.demand)} L/hr</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">Pressure</dt>
+                      <dd className="font-medium">{(critical ? 3.3 : zone.pressure).toFixed(1)} bar</dd>
+                    </div>
+                  </dl>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {fmt(zone.users)} users · Baseline loss {zone.baselineLoss}
+                  </p>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      </PageSection>
     </div>
-
-    <section className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
-      <Panel eyebrow="Network overview" title="Live water network" action={<AppButton variant="soft" onClick={() => setPage('network')}>Open map</AppButton>}>
-        <NetworkMap incidentActive={active} compact onSelectSegment={() => setPage('network')} />
-      </Panel>
-      <Panel eyebrow="Incident center" title={active ? 'Active investigation' : 'No active incident'}>
-        {active ? <div className="space-y-4">
-          <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4">
-            <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-bold text-slate-900">Probable pipeline leak</div><div className="mt-1 text-xs text-slate-500">B2 → B3 · Zone B · INC-1048</div></div><Badge tone="danger">HIGH</Badge></div>
-            <div className="mt-4 grid grid-cols-2 gap-3"><Metric label="Confidence" value="76%" tone="danger" /><Metric label="Estimated loss" value="3,500" hint="L/hr" tone="danger" /></div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2"><AppButton onClick={() => setPage('incident')}>Investigate cause</AppButton><AppButton variant="soft" onClick={() => setPage('whatif')}>Run what-if</AppButton></div>
-          <AppButton variant="soft" className="w-full" onClick={onExport}>Export Incident Report</AppButton>
-        </div> : <div className="flex min-h-[250px] flex-col items-center justify-center text-center"><div className="grid h-16 w-16 place-items-center rounded-2xl bg-emerald-100 text-2xl text-emerald-600 shadow-sm">✓</div><div className="mt-4 text-lg font-bold text-slate-900">Network looks healthy</div><p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">Inject a controlled incident to demonstrate the full HydraNexus decision-support workflow.</p><AppButton className="mt-5" onClick={trigger}>Trigger simulated leak</AppButton></div>}
-      </Panel>
-    </section>
-
-    <section><SectionTitle eyebrow="Telemetry" title="Network pulse" description="Live telemetry feed and anomaly detection visualization." /><TelemetryCharts data={data} /></section>
-
-    <section><SectionTitle eyebrow="Pressure zones" title="Zone health" description="Quick operational view across monitored zones." /><div className="grid gap-4 md:grid-cols-3">{zones.map(zone => { const critical = active && zone.id === 'B'; return <Panel key={zone.id} title={zone.name} action={<Badge tone={critical ? 'danger' : 'success'}>{critical ? 'Critical' : 'Normal'}</Badge>}><div className="grid grid-cols-2 gap-3"><Metric label="Demand" value={`${fmt(zone.demand)} L/hr`} /><Metric label="Pressure" value={`${(critical ? 3.3 : zone.pressure).toFixed(1)} bar`} tone={critical ? 'danger' : 'default'} /></div><div className="mt-3 flex items-center justify-between text-xs text-slate-500"><span>Estimated users: {fmt(zone.users)}</span><span>Baseline loss: {zone.baselineLoss}</span></div></Panel>})}</div></section>
-  </div>
+  )
 }
+
+/* -------------------------------- Network ------------------------------- */
 
 function NetworkPage({ active }) {
-  const [selected, setSelected] = useState('B2 → B3')
-  return <div className="space-y-5"><SectionTitle eyebrow="Topology" title="Water distribution map" description="A simplified operator view of the prototype network." action={active && <Badge tone="danger">Suspected: B2 → B3</Badge>} /><Panel><NetworkMap incidentActive={active} onSelectSegment={setSelected} /><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric label="Nodes" value="6" /><Metric label="Pipelines" value="5" /><Metric label="Zones" value="3" /><Metric label="Selected segment" value={selected} /></div></Panel><div className="grid gap-5 lg:grid-cols-2"><Panel eyebrow="Topology" title="Network components"><div className="grid gap-2">{['Reservoir · Source','N1 · Main Junction','N2 · Zone A','N3 · B2 Junction','N4 · B3 / Zone B','N5 · Zone C'].map(item => <div key={item} className="flex items-center justify-between rounded-xl border border-white/70 bg-white/55 px-4 py-3 text-sm"><span className="text-slate-700">{item}</span><span className="text-[10px] font-bold tracking-[.1em] text-emerald-600">ONLINE</span></div>)}</div></Panel><Panel eyebrow="How it helps" title="Probable fault localization"><p className="text-sm leading-7 text-slate-600">The prototype combines abnormal telemetry with network topology to identify the most plausible affected segment. A future production connector can supply SCADA, GIS and hydraulic-model data.</p></Panel></div></div>
+  return (
+    <div className="space-y-4">
+      <PageSection
+        eyebrow="Topology"
+        title="Distribution map"
+        description="Prototype network. Highlight follows the AI localization."
+        action={active && <Badge variant="destructive">Suspected: B2 → B3</Badge>}
+      >
+        <NetworkMap incidentActive={active} />
+      </PageSection>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Components</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5 text-sm">
+            {['Reservoir · Source', 'N1 · Main junction', 'N2 · Zone A', 'N3 · B2 junction', 'N4 · B3 / Zone B', 'N5 · Zone C'].map(
+              (item) => (
+                <div key={item} className="flex items-center justify-between border-b py-1.5 last:border-0">
+                  <span>{item}</span>
+                  <Badge variant="secondary">Online</Badge>
+                </div>
+              )
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Localization</CardTitle>
+            <CardDescription>How the suspected segment is chosen</CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm leading-6 text-muted-foreground">
+            Abnormal telemetry is combined with the NetworkX topology to rank the most plausible segment. A production
+            connector could supply SCADA, GIS and hydraulic-model data here.
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
 }
+
+/* ------------------------------- Monitoring ------------------------------ */
+
+const SCENARIOS = [
+  ['normal', 'Normal'],
+  ['leak', 'Leak'],
+  ['burst', 'Burst'],
+  ['demand', 'Demand spike'],
+  ['sensor', 'Sensor fault'],
+]
 
 function MonitoringPage({ scenario, setScenario }) {
   const [search, setSearch] = useState('')
   const [live, setLive] = useState(null)
-  const [source, setSource] = useState('mock')
+  const mocks = { normal: normalTelemetry, leak: leakTelemetry, burst: burstTelemetry, demand: demandTelemetry, sensor: sensorTelemetry }
+
   useEffect(() => {
     let cancelled = false
     setLive(null)
-    fetchTelemetry(scenario, 8).then(d => { if (!cancelled) { setLive(d); setSource('live API') } }).catch(() => { if (!cancelled) setSource('mock') })
-    return () => { cancelled = true }
+    fetchTelemetry(scenario, 8)
+      .then((d) => {
+        if (!cancelled) setLive(d)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [scenario])
-  const telemetry = { normal: normalTelemetry, leak: leakTelemetry, burst: burstTelemetry, demand: demandTelemetry, sensor: sensorTelemetry }
-  const data = live || telemetry[scenario]
+
+  const data = live || mocks[scenario]
   const last = data.at(-1)
+  const filtered = search ? data.filter((d) => d.time.includes(search) || String(d.flow).includes(search)) : data
 
-  const filteredData = useMemo(() => {
-    if (!search) return data
-    return data.filter(d => d.time.includes(search) || String(d.flow).includes(search))
-  }, [data, search])
-
-  return <div className="space-y-5"><SectionTitle eyebrow="Telemetry" title="Monitoring workspace" description="Switch scenarios to see how the operator view responds." action={<select value={scenario} onChange={e => setScenario(e.target.value)} className="rounded-xl border border-white/90 bg-white/80 px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none shadow-sm"><option value="normal">Normal operation</option><option value="leak">Pipeline leak</option><option value="burst">Pipe burst</option><option value="demand">Demand spike</option><option value="sensor">Sensor anomaly</option></select>} /><div className="grid gap-4 md:grid-cols-3"><Metric label="Current flow" value={`${fmt(last.flow)} L/hr`} hint="Expected ≈ 8,000 L/hr" tone={last.flow > 9000 ? 'danger' : 'default'} /><Metric label="Pressure" value={`${last.pressure.toFixed(1)} bar`} hint="Expected ≈ 4.0 bar" tone={last.pressure < 3.6 ? 'danger' : 'default'} /><Metric label="Consumption" value={`${fmt(last.consumption)} L/hr`} hint="Expected ≈ 3,000 L/hr" tone={last.consumption > 3600 ? 'warning' : 'default'} /></div><TelemetryCharts data={data} /><Panel eyebrow="Latest readings" title="Telemetry table" action={<input type="text" placeholder="Filter by time..." value={search} onChange={e => setSearch(e.target.value)} className="rounded-xl border border-white/80 bg-white/80 px-3 py-1.5 text-xs text-slate-700 outline-none" />}><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-xs uppercase tracking-wider text-slate-400"><tr><th className="pb-3">Time</th><th>Flow</th><th>Pressure</th><th>Consumption</th><th>Anomaly Index</th><th>Status</th></tr></thead><tbody className="divide-y divide-slate-200/80">{filteredData.slice().reverse().map(row => { const abnormal = row.flow > 9000 || row.pressure < 3.6 || row.consumption > 3600; return <tr key={row.time}><td className="py-3 font-semibold text-slate-700">{row.time}</td><td className="text-slate-600">{fmt(row.flow)} L/hr</td><td className="text-slate-600">{row.pressure.toFixed(1)} bar</td><td className="text-slate-600">{fmt(row.consumption)} L/hr</td><td className="text-slate-600 font-mono text-xs">{row.anomalyScore ? row.anomalyScore.toFixed(2) : '0.02'}</td><td><Badge tone={abnormal ? 'warning' : 'success'}>{abnormal ? 'WARNING' : 'NORMAL'}</Badge></td></tr>})}</tbody></table></div></Panel></div>
+  return (
+    <div className="space-y-4">
+      <PageSection
+        eyebrow="Telemetry"
+        title="Monitoring"
+        description={live ? 'Live backend feed.' : 'Backend unreachable — showing cached mock.'}
+        action={
+          <select
+            value={scenario}
+            onChange={(e) => setScenario(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          >
+            {SCENARIOS.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        }
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <Stat label="Flow" value={`${fmt(last.flow)} L/hr`} hint="Expected ≈ 8,000" alert={last.flow > 9000} />
+          <Stat label="Pressure" value={`${last.pressure.toFixed(1)} bar`} hint="Expected ≈ 4.0" alert={last.pressure < 3.6} />
+          <Stat label="Consumption" value={`${fmt(last.consumption)} L/hr`} hint="Expected ≈ 3,000" alert={last.consumption > 3600} />
+        </div>
+        <TelemetryCharts data={data} />
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium">Readings</CardTitle>
+            <Input placeholder="Filter by time…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[180px]" />
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Flow</TableHead>
+                  <TableHead>Pressure</TableHead>
+                  <TableHead>Consumption</TableHead>
+                  <TableHead>Anomaly</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered
+                  .slice()
+                  .reverse()
+                  .map((row) => {
+                    const abnormal = row.flow > 9000 || row.pressure < 3.6 || row.consumption > 3600
+                    return (
+                      <TableRow key={row.time}>
+                        <TableCell className="font-medium">{row.time}</TableCell>
+                        <TableCell>{fmt(row.flow)}</TableCell>
+                        <TableCell>{row.pressure.toFixed(1)}</TableCell>
+                        <TableCell>{fmt(row.consumption)}</TableCell>
+                        <TableCell>{row.anomalyScore?.toFixed(2)}</TableCell>
+                        <TableCell>
+                          {abnormal ? <Badge variant="destructive">Anomaly</Badge> : <Badge variant="secondary">Normal</Badge>}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </PageSection>
+    </div>
+  )
 }
+
+/* ------------------------------ Investigation ---------------------------- */
 
 function InvestigationPage({ active, verify, verified, onExport }) {
   const incident = incidents[0]
-  return <div className="space-y-5"><SectionTitle eyebrow="Incident investigation" title="Why is the network abnormal?" description="A transparent breakdown of the current hypothesis and supporting evidence." action={<Badge tone={verified ? 'success' : 'warning'}>{verified ? 'Verified' : 'Needs verification'}</Badge>} />
-    <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
-      <Panel eyebrow="Alert" title="Incident snapshot"><div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-5"><div className="flex items-center justify-between"><div><div className="text-sm font-bold text-slate-900">{active ? incident.title : 'No active incident'}</div><div className="mt-1 text-xs text-slate-500">{active ? `${incident.location} · ${incident.zone}` : 'Trigger a simulated incident from the command center.'}</div></div>{active && <Badge tone="danger">HIGH</Badge>}</div>{active && <div className="mt-5 grid gap-4 sm:grid-cols-2"><Metric label="Flow change" value="+31%" tone="danger" /><Metric label="Pressure change" value="-17%" tone="danger" /></div>}</div>{active && <div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-white bg-white/65 p-4"><div className="text-xs font-bold uppercase tracking-wider text-slate-400">Probable location</div><div className="mt-2 text-xl font-bold text-slate-900">B2 → B3</div><div className="mt-1 text-sm text-slate-500">Localization confidence 81%</div></div><div className="rounded-2xl border border-white bg-white/65 p-4"><div className="text-xs font-bold uppercase tracking-wider text-slate-400">Primary hypothesis</div><div className="mt-2 text-xl font-bold text-slate-900">Pipeline leak</div><div className="mt-1 text-sm text-slate-500">AI-assisted ranking</div></div></div>}</Panel>
-      <Panel eyebrow="Cause ranking" title="Possible explanations"><div className="space-y-3">{incident.causes.map(([cause, score]) => <div key={cause} className="rounded-xl border border-white/80 bg-white/60 p-4"><div className="flex items-center justify-between text-sm"><span className="font-semibold text-slate-700">{cause}</span><span className="font-bold text-sky-600">{active ? score : 0}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-cyan-500 transition-all duration-500" style={{ width: `${active ? score : 0}%` }} /></div></div>)}</div></Panel>
+  return (
+    <div className="space-y-4">
+      <PageSection
+        eyebrow="Investigation"
+        title="Why is the network abnormal?"
+        action={verified ? <Badge variant="secondary">Verified</Badge> : <Badge variant="outline">Needs verification</Badge>}
+      >
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Incident snapshot</CardTitle>
+              <CardDescription>{active ? `${incident.location} · ${incident.zone}` : 'No active incident'}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {active ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{incident.title}</span>
+                    <Badge variant="destructive">High</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Stat label="Flow change" value="+31%" alert />
+                    <Stat label="Pressure change" value="−17%" alert />
+                  </div>
+                  <Separator />
+                  <dl className="space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Probable location</dt>
+                      <dd className="font-medium">B2 → B3 (81% confidence)</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Primary hypothesis</dt>
+                      <dd className="font-medium">Pipeline leak</dd>
+                    </div>
+                  </dl>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Trigger a simulated incident from the header.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Possible causes</CardTitle>
+              <CardDescription>Ranked by the hybrid ML + rules model</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {incident.causes.map(([cause, score]) => (
+                <div key={cause}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>{cause}</span>
+                    <span className="font-medium">{active ? score : 0}%</span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
+                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${active ? score : 0}%` }} />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Evidence</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {incident.evidence.map((item) => (
+              <div key={item} className="flex gap-2 text-sm text-muted-foreground">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </CardContent>
+          <CardFooter className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">Compare the observed pattern with a simulated B2 → B3 leak.</p>
+            <div className="flex gap-2">
+              <Button size="sm" variant={verified ? 'secondary' : 'default'} onClick={verify}>
+                {verified ? 'Verified' : 'Verify scenario'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={onExport}>
+                <Download /> Export JSON
+              </Button>
+            </div>
+          </CardFooter>
+        </Card>
+      </PageSection>
     </div>
-    <Panel eyebrow="Evidence" title="Why the system believes this is a leak"><div className="grid gap-3 md:grid-cols-2">{incident.evidence.map((item) => <div key={item} className="flex gap-3 rounded-xl border border-white/80 bg-white/60 p-4"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-600">✓</span><p className="text-sm leading-6 text-slate-600">{item}</p></div>)}</div><div className="mt-5 flex flex-col gap-3 rounded-2xl bg-sky-50/80 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="font-bold text-slate-900">Scenario verification</div><div className="mt-1 text-sm text-slate-500">Compare the observed pattern with a simulated B2 → B3 leak.</div></div><div className="flex gap-2"><AppButton onClick={verify}>{verified ? 'Scenario verified ✓' : 'Verify scenario'}</AppButton><AppButton variant="soft" onClick={onExport}>Export JSON Report</AppButton></div></div></Panel>
-  </div>
+  )
 }
 
+/* --------------------------------- Impact -------------------------------- */
+
 function ImpactPage({ active }) {
-  return <div className="space-y-5"><SectionTitle eyebrow="Impact" title="Operational impact assessment" description="Translate the suspected fault into loss, exposure and severity." />{active ? <><div className="grid gap-4 md:grid-cols-3"><Metric label="Estimated water loss" value="3,500 L/hr" tone="danger" /><Metric label="24-hour loss projection" value="84,000 L" tone="danger" /><Metric label="Affected zone" value="Zone B" /></div><div className="grid gap-5 lg:grid-cols-2"><Panel eyebrow="Incident severity" title="Priority: High"><div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-5"><div className="flex items-center justify-between"><div><div className="text-sm font-bold text-slate-900">Immediate investigation recommended</div><div className="mt-1 text-sm text-slate-600">Potential loss is material and the affected segment is reasonably localized.</div></div><Badge tone="warning">HIGH</Badge></div><div className="mt-5 grid grid-cols-2 gap-3"><Metric label="Zone B users" value="560" /><Metric label="Suspected segment" value="B2 → B3" /></div></div></Panel><Panel eyebrow="Impact interpretation" title="What the operator should know"><div className="space-y-3 text-sm leading-6 text-slate-600"><p>• Estimated loss continues while the incident remains unresolved.</p><p>• Isolating the suspected segment may reduce losses but can affect service in Zone B.</p><p>• Final intervention remains with a qualified operator.</p></div></Panel></div></> : <Panel title="No active incident"><div className="py-12 text-center text-slate-500">Trigger the simulated leak to populate the impact assessment.</div></Panel>}</div>
+  if (!active) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-sm text-muted-foreground">
+          No active incident. Trigger the simulated leak to populate the impact assessment.
+        </CardContent>
+      </Card>
+    )
+  }
+  return (
+    <div className="space-y-4">
+      <PageSection eyebrow="Impact" title="Operational impact" description="Loss, exposure and severity.">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Stat label="Est. loss" value="3,500 L/hr" alert />
+          <Stat label="24-hour projection" value="84,000 L" alert />
+          <Stat label="Affected zone" value="Zone B" hint="560 users" />
+        </div>
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="text-sm font-medium">Priority: High</CardTitle>
+              <CardDescription>Immediate investigation recommended.</CardDescription>
+            </div>
+            <Badge variant="destructive">High</Badge>
+          </CardHeader>
+          <CardContent className="text-sm leading-6 text-muted-foreground">
+            Loss continues while the incident is unresolved. Isolating B2 → B3 reduces loss but affects Zone B service.
+            Final intervention stays with a qualified operator.
+          </CardContent>
+        </Card>
+      </PageSection>
+    </div>
+  )
 }
+
+/* --------------------------------- What-If ------------------------------- */
 
 function WhatIfPage({ active }) {
   const [option, setOption] = useState('isolate')
   const [ran, setRan] = useState(false)
-  const [valveThrottle, setValveThrottle] = useState(50)
+  const [throttle, setThrottle] = useState(50)
   const chosen = whatIfOptions[option]
 
-  const calculatedLoss = useMemo(() => {
+  const afterLoss = useMemo(() => {
     if (option === 'reducePressure') {
-      const factor = (100 - valveThrottle) / 100
+      const factor = (100 - throttle) / 100
       return Math.round(3500 * (0.45 + factor * 0.55))
     }
     return chosen.after.loss
-  }, [option, valveThrottle, chosen])
+  }, [option, throttle, chosen])
 
-  const reduction = Math.round(((chosen.before.loss - calculatedLoss) / chosen.before.loss) * 100)
+  const reduction = Math.round(((chosen.before.loss - afterLoss) / chosen.before.loss) * 100)
 
-  return <div className="space-y-5"><SectionTitle eyebrow="Decision support" title="What-If Studio" description="Compare intervention outcomes before taking action." action={<Badge tone="info">Operator controlled</Badge>} />{active ? <div className="grid gap-5 xl:grid-cols-[.85fr_1.15fr]"><Panel eyebrow="Choose an action" title="Intervention scenario"><div className="space-y-3">{Object.entries(whatIfOptions).map(([key, item]) => <button key={key} onClick={() => { setOption(key); setRan(false) }} className={`w-full rounded-2xl border p-4 text-left transition ${option === key ? 'border-sky-300 bg-sky-50/80 shadow-sm' : 'border-white/80 bg-white/60 hover:bg-white'}`}><div className="flex items-center justify-between"><span className="font-bold text-slate-800">{item.label}</span><span className={`h-4 w-4 rounded-full border-2 ${option === key ? 'border-sky-500 bg-sky-500 ring-4 ring-sky-100' : 'border-slate-300'}`} /></div><p className="mt-2 text-sm leading-6 text-slate-500">{item.notes}</p></button>)}
+  if (!active) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-sm text-muted-foreground">
+          No active incident. Trigger the simulated leak to enable what-if analysis.
+        </CardContent>
+      </Card>
+    )
+  }
 
-  {option === 'reducePressure' && (
-    <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
-      <div className="flex justify-between text-xs font-bold text-slate-700">
-        <span>PRV Valve Throttle:</span>
-        <span>{valveThrottle}%</span>
-      </div>
-      <input type="range" min="0" max="100" value={valveThrottle} onChange={e => setValveThrottle(Number(e.target.value))} className="mt-2 w-full accent-sky-500" />
+  return (
+    <div className="space-y-4">
+      <PageSection
+        eyebrow="Decision support"
+        title="What-If Studio"
+        description="Simulated outcomes. Operator controlled."
+        action={<Badge variant="outline">Advisory only</Badge>}
+      >
+        <div className="grid gap-4 xl:grid-cols-5">
+          <Card className="xl:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Intervention</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {Object.entries(whatIfOptions).map(([key, item]) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setOption(key)
+                    setRan(false)
+                  }}
+                  className={`w-full rounded-md border p-3 text-left text-sm transition-colors ${
+                    option === key ? 'border-primary bg-accent' : 'hover:bg-accent/50'
+                  }`}
+                >
+                  <span className="font-medium">{item.label}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{item.notes}</span>
+                </button>
+              ))}
+              {option === 'reducePressure' && (
+                <div className="rounded-md border p-3">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Valve throttle</span>
+                    <span className="font-medium">{throttle}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={throttle}
+                    onChange={(e) => setThrottle(Number(e.target.value))}
+                    className="mt-2 w-full accent-primary"
+                  />
+                </div>
+              )}
+              <Button className="w-full" onClick={() => setRan(true)}>
+                Run simulation
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="xl:col-span-3">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">{ran ? 'Simulated result' : 'Ready'}</CardTitle>
+              <CardDescription>{ran ? chosen.label : 'Select an intervention and run the simulation.'}</CardDescription>
+            </CardHeader>
+            {ran && (
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Stat label="Loss reduction" value={`${reduction}%`} />
+                  <Stat label="Pressure after" value={`${chosen.after.pressure.toFixed(1)} bar`} />
+                  <Stat label="Users affected" value={chosen.after.users} alert={chosen.after.users > 0} />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div className="rounded-md border p-4">
+                    <p className="text-xs text-muted-foreground">Before</p>
+                    <p className="mt-1 text-xl font-semibold">{fmt(chosen.before.loss)} <span className="text-xs font-normal text-muted-foreground">L/hr</span></p>
+                  </div>
+                  <div className="rounded-md border border-primary/30 bg-accent/50 p-4">
+                    <p className="text-xs text-muted-foreground">After</p>
+                    <p className="mt-1 text-xl font-semibold">{fmt(afterLoss)} <span className="text-xs font-normal text-muted-foreground">L/hr</span></p>
+                  </div>
+                </div>
+                <p className="rounded-md bg-secondary p-3 text-xs leading-5 text-secondary-foreground">{chosen.notes}</p>
+              </CardContent>
+            )}
+          </Card>
+        </div>
+      </PageSection>
     </div>
-  )}
-
-  <AppButton className="w-full" onClick={() => setRan(true)}>Run simulation</AppButton></div></Panel><Panel eyebrow="Scenario outcome" title={ran ? 'Simulated result' : 'Ready to simulate'}>{ran ? <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-3"><Metric label="Loss reduction" value={`${reduction}%`} tone={reduction > 0 ? 'success' : 'default'} /><Metric label="After pressure" value={`${chosen.after.pressure.toFixed(1)} bar`} /><Metric label="Users affected" value={chosen.after.users} tone={chosen.after.users > 0 ? 'warning' : 'default'} /></div><div className="grid gap-4 sm:grid-cols-2"><div className="rounded-2xl border border-white/80 bg-white/60 p-5"><div className="text-xs font-bold uppercase tracking-wider text-slate-400">Before</div><div className="mt-3 text-2xl font-bold text-slate-900">{fmt(chosen.before.loss)} <span className="text-sm font-semibold text-slate-500">L/hr</span></div><div className="mt-2 text-sm text-slate-500">Pressure {chosen.before.pressure.toFixed(1)} bar</div></div><div className="rounded-2xl border border-sky-200 bg-sky-50/80 p-5"><div className="text-xs font-bold uppercase tracking-wider text-sky-500">After</div><div className="mt-3 text-2xl font-bold text-slate-900">{fmt(calculatedLoss)} <span className="text-sm font-semibold text-slate-500">L/hr</span></div><div className="mt-2 text-sm text-slate-500">Pressure {chosen.after.pressure.toFixed(1)} bar</div></div></div><div className="rounded-2xl bg-slate-900 p-5 text-white"><div className="text-sm font-bold">Operator note</div><p className="mt-2 text-sm leading-6 text-slate-300">{chosen.notes}</p></div></div> : <div className="flex min-h-[330px] flex-col items-center justify-center text-center"><div className="grid h-14 w-14 place-items-center rounded-2xl bg-sky-100 text-xl text-sky-600">↔</div><div className="mt-4 font-bold text-slate-900">Select an intervention</div><p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">HydraNexus will compare the expected consequences against the current incident state.</p></div>}</Panel></div> : <Panel title="No active incident"><div className="py-12 text-center text-slate-500">Trigger a simulated incident before running a what-if scenario.</div></Panel>}</div>
+  )
 }
+
+/* --------------------------------- History ------------------------------- */
 
 function HistoryPage({ setPage }) {
   const [filter, setFilter] = useState('')
-  const filteredIncidents = incidents.filter(i => i.title.toLowerCase().includes(filter.toLowerCase()) || i.id.toLowerCase().includes(filter.toLowerCase()))
-
-  return <div className="space-y-5"><SectionTitle eyebrow="History" title="Incident history" description="A lightweight record for the prototype environment." action={<input type="text" placeholder="Search history..." value={filter} onChange={e => setFilter(e.target.value)} className="rounded-xl border border-white/80 bg-white/80 px-3 py-2 text-xs text-slate-700 outline-none" />} /><Panel><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-xs uppercase tracking-wider text-slate-400"><tr><th className="pb-3">Incident</th><th>Type</th><th>Location</th><th>Started</th><th>Severity</th><th>Status</th></tr></thead><tbody className="divide-y divide-slate-200/80">{filteredIncidents.map(item => <tr key={item.id}><td className="py-4"><div className="font-bold text-slate-800">{item.id}</div><div className="mt-0.5 text-xs text-slate-500">{item.title}</div></td><td className="text-slate-600">{item.type}</td><td className="text-slate-600">{item.location}</td><td className="text-slate-600">{item.started}</td><td><Badge tone={item.severity === 'HIGH' ? 'danger' : 'warning'}>{item.severity}</Badge></td><td><Badge tone={item.status === 'Resolved' ? 'success' : 'warning'}>{item.status}</Badge></td></tr>)}</tbody></table></div><div className="mt-5 flex justify-end"><AppButton variant="soft" onClick={() => setPage('monitoring')}>Explore telemetry</AppButton></div></Panel></div>
+  const rows = incidents.filter(
+    (i) => i.title.toLowerCase().includes(filter.toLowerCase()) || i.id.toLowerCase().includes(filter.toLowerCase())
+  )
+  return (
+    <div className="space-y-4">
+      <PageSection
+        eyebrow="History"
+        title="Incidents"
+        action={<Input placeholder="Search…" value={filter} onChange={(e) => setFilter(e.target.value)} className="max-w-[180px]" />}
+      >
+        <Card>
+          <CardContent className="pt-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Incident</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Started</TableHead>
+                  <TableHead>Severity</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <div className="font-medium">{item.id}</div>
+                      <div className="text-xs text-muted-foreground">{item.title}</div>
+                    </TableCell>
+                    <TableCell>{item.type}</TableCell>
+                    <TableCell>{item.location}</TableCell>
+                    <TableCell>{item.started}</TableCell>
+                    <TableCell>
+                      <Badge variant={item.severity === 'HIGH' ? 'destructive' : 'outline'}>{item.severity}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={item.status === 'Resolved' ? 'secondary' : 'outline'}>{item.status}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="flex justify-end pt-4">
+              <Button variant="outline" size="sm" onClick={() => setPage('monitoring')}>
+                Explore telemetry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </PageSection>
+    </div>
+  )
 }
+
+/* --------------------------------- Settings ------------------------------ */
 
 function SettingsPage() {
-  const [autoRefresh, setAutoRefresh] = useState(true)
-  const [notify, setNotify] = useState(true)
   const [backend, setBackend] = useState({ online: false, checked: false })
-  useEffect(() => { checkHealth().then(r => setBackend({ online: r.online, checked: true })).catch(() => setBackend({ online: false, checked: true })) }, [])
-  return <div className="space-y-5"><SectionTitle eyebrow="Prototype" title="Settings" description="Keep the hackathon environment transparent and simple." /><div className="grid gap-5 lg:grid-cols-2"><Panel title="Operator preferences"><div className="space-y-3">{[[autoRefresh, setAutoRefresh, 'Auto-refresh telemetry', 'Refresh simulated readings in the dashboard'], [notify, setNotify, 'Incident notifications', 'Show visual alerts for new anomalies']].map(([value, setter, title, desc]) => <label key={title} className="flex cursor-pointer items-center justify-between rounded-2xl border border-white/80 bg-white/60 p-4"><div><div className="font-semibold text-slate-800">{title}</div><div className="mt-1 text-sm text-slate-500">{desc}</div></div><input type="checkbox" checked={value} onChange={e => setter(e.target.checked)} className="h-5 w-5 accent-sky-500" /></label>)}</div></Panel><Panel title="Environment"><div className="space-y-2">{[['Data source', backend.checked ? (backend.online ? 'Live API (with mock fallback)' : 'Mock telemetry (API offline)') : 'Checking backend...'], ['Analytics', 'Hybrid ML + rules (prototype)'], ['Network model', 'NetworkX topology'], ['Simulation', 'FastAPI scenario engine'], ['Deployment', 'React + Vite']].map(([a,b]) => <div key={a} className="flex items-center justify-between rounded-xl border border-white/70 bg-white/55 px-4 py-3 text-sm"><span className="text-slate-500">{a}</span><span className="font-semibold text-slate-700">{b}</span></div>)}</div><div className="mt-3 text-xs text-slate-500">Backend: {backend.checked ? (backend.online ? '● online' : '○ offline — using mock data') : 'checking...'}</div></Panel></div></div>
+  useEffect(() => {
+    checkHealth()
+      .then((r) => setBackend({ online: r.online, checked: true }))
+      .catch(() => setBackend({ online: false, checked: true }))
+  }, [])
+  const env = [
+    ['Data source', backend.checked ? (backend.online ? 'Live API + mock fallback' : 'Mock (API offline)') : 'Checking…'],
+    ['Analytics', 'Hybrid ML + rules'],
+    ['Network model', 'NetworkX topology'],
+    ['Simulation', 'FastAPI scenario engine'],
+    ['Deployment', 'React + Vite'],
+  ]
+  return (
+    <div className="space-y-4">
+      <PageSection eyebrow="Prototype" title="Settings">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Backend</CardTitle>
+              <CardDescription>FastAPI connection status</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {backend.checked ? (
+                backend.online ? (
+                  <Badge variant="secondary">Online</Badge>
+                ) : (
+                  <Badge variant="destructive">Offline — using mock data</Badge>
+                )
+              ) : (
+                <Badge variant="outline">Checking…</Badge>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Environment</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5 text-sm">
+              {env.map(([a, b]) => (
+                <div key={a} className="flex items-center justify-between border-b py-1.5 last:border-0">
+                  <span className="text-muted-foreground">{a}</span>
+                  <span className="font-medium">{b}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </PageSection>
+    </div>
+  )
 }
+
+/* ----------------------------------- App --------------------------------- */
 
 export default function App() {
   const [page, setPage] = useState('overview')
@@ -180,7 +714,19 @@ export default function App() {
   const [verified, setVerified] = useState(false)
   const [toast, setToast] = useState(null)
 
-  const data = useMemo(() => active || scenario === 'leak' ? leakTelemetry : scenario === 'burst' ? burstTelemetry : scenario === 'demand' ? demandTelemetry : scenario === 'sensor' ? sensorTelemetry : normalTelemetry, [active, scenario])
+  const data = useMemo(
+    () =>
+      active || scenario === 'leak'
+        ? leakTelemetry
+        : scenario === 'burst'
+          ? burstTelemetry
+          : scenario === 'demand'
+            ? demandTelemetry
+            : scenario === 'sensor'
+              ? sensorTelemetry
+              : normalTelemetry,
+    [active, scenario]
+  )
 
   const trigger = () => {
     const next = !active
@@ -188,8 +734,8 @@ export default function App() {
     setScenario(next ? 'leak' : 'normal')
     setVerified(false)
     setToast({
-      message: next ? 'CRITICAL ALERT: Leak anomaly detected on segment B2 → B3!' : 'System returned to normal operational baseline.',
-      type: next ? 'danger' : 'success'
+      message: next ? 'Leak anomaly detected on segment B2 → B3.' : 'Returned to normal baseline.',
+      type: next ? 'danger' : 'success',
     })
   }
 
@@ -197,11 +743,12 @@ export default function App() {
     setVerified(true)
     try {
       const res = await postVerify(data, scenario === 'normal' ? 'leak' : scenario, 'B2 → B3')
-      setToast({ message: `Scenario verification: ${res.matchScore}% (${res.evidenceStrength})`, type: res.verified ? 'success' : 'info' })
+      setToast({ message: `Verification: ${res.matchScore}% (${res.evidenceStrength}).`, type: res.verified ? 'success' : 'info' })
     } catch {
-      setToast({ message: 'Scenario verified against local mock model.', type: 'success' })
+      setToast({ message: 'Verified against the local mock model.', type: 'success' })
     }
   }
+
   const exportReport = () => {
     const report = {
       timestamp: new Date().toISOString(),
@@ -216,14 +763,23 @@ export default function App() {
     a.download = `hydranexus-incident-report-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    setToast({ message: 'Incident report exported successfully!', type: 'success' })
+    setToast({ message: 'Incident report exported.', type: 'success' })
   }
 
   const meta = pageMeta[page]
   const render = () => {
     if (page === 'overview') return <Overview active={active} data={data} setPage={setPage} trigger={trigger} onExport={exportReport} />
     if (page === 'network') return <NetworkPage active={active} />
-    if (page === 'monitoring') return <MonitoringPage scenario={scenario} setScenario={s => { setScenario(s); setActive(s === 'leak') }} />
+    if (page === 'monitoring')
+      return (
+        <MonitoringPage
+          scenario={scenario}
+          setScenario={(s) => {
+            setScenario(s)
+            setActive(s === 'leak')
+          }}
+        />
+      )
     if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} onExport={exportReport} />
     if (page === 'impact') return <ImpactPage active={active} />
     if (page === 'whatif') return <WhatIfPage active={active} />
@@ -232,21 +788,16 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#eef9ff] text-slate-800">
-      <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-sky-200/50 blur-3xl" />
-        <div className="absolute right-0 top-1/3 h-96 w-96 rounded-full bg-cyan-100/70 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-80 w-80 rounded-full bg-blue-100/50 blur-3xl" />
-      </div>
-      <div className="relative lg:flex">
+    <div className="min-h-screen bg-background text-foreground">
+      <Toast toast={toast} onClose={() => setToast(null)} />
+      <div className="lg:flex">
         <Sidebar page={page} setPage={setPage} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} incidentActive={active} />
         <div className="min-w-0 flex-1">
           <PageHeader title={meta[0]} subtitle={meta[1]} onMenu={() => setMobileOpen(true)} onTrigger={trigger} incidentActive={active} />
-          <main className="mx-auto max-w-[1540px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+          <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
             {render()}
-            <footer className="border-t border-white/70 pt-5 pb-4 text-center text-xs text-slate-400">
-              HydraNexus MVP · Software-first prototype · Human-in-the-loop decision support · Synthetic data for demonstration
+            <footer className="border-t pt-4 text-center text-xs text-muted-foreground">
+              HydraNexus MVP · Demo mode — simulated data, no live sensors · Human-in-the-loop
             </footer>
           </main>
         </div>
