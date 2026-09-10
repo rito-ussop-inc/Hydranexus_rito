@@ -165,8 +165,11 @@ def whatif(body: WhatIfRequest):
         raise HTTPException(status_code=400, detail=f"unknown scenario '{key}'. Choose {sorted(WHATIF_CATALOG)}")
     incident = (body.incident or "leak").lower()
     # Baseline loss per incident type; frontend may override with live estimate.
+    # Demand / sensor / normal have no pipe loss by definition — ignore any passed baseline.
     incident_defaults = {"leak": 3500, "burst": 7000, "demand": 0, "sensor": 0, "normal": 0}
-    if body.baselineLoss is not None:
+    if incident in ("demand", "sensor", "normal"):
+        base = 0.0
+    elif body.baselineLoss is not None:
         base = max(0.0, float(body.baselineLoss))
     else:
         base = float(incident_defaults.get(incident, 3500))

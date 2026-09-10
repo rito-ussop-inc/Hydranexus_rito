@@ -169,6 +169,9 @@ def analyze(telemetry: list[dict]) -> dict:
                     "Sensor Fault": "sensor", "Valve Issue": "normal", "Normal Operation": "normal"}
     location = localize(dev["flow"], dev["pressure"], dev["consumption"], scenario_map.get(top_cause, ""))
     loss = estimate_loss(flow, consumption)
+    # No pipe leakage for non-loss hypotheses: extra flow is consumed or a sensor error.
+    if top_cause in ("Demand Spike", "Sensor Fault", "Normal Operation"):
+        loss = 0.0
     loss24 = round(loss * 24, 1)
     severity = severity_for(loss, pressure, score)
     evidence = build_evidence(latest, dev, causes, location)
