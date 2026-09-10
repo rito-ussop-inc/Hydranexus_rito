@@ -516,15 +516,21 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, d
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">Evidence</CardTitle>
-            <CardDescription>{live ? 'Backend evidence with deviation + topology' : 'Cached mock evidence'}</CardDescription>
+            <CardDescription>
+              {!active ? 'No evidence — system nominal' : live ? 'Backend evidence with deviation + topology' : 'Cached mock evidence'}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {evidence.map((item) => (
-              <div key={item} className="flex gap-2 text-sm text-muted-foreground">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                <span>{item}</span>
-              </div>
-            ))}
+            {!active ? (
+              <p className="text-sm text-muted-foreground">Trigger a simulated incident to generate evidence.</p>
+            ) : (
+              evidence.map((item) => (
+                <div key={item} className="flex gap-2 text-sm text-muted-foreground">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  <span>{item}</span>
+                </div>
+              ))
+            )}
           </CardContent>
           <CardFooter className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">Compare the observed pattern with a simulated {segment} {hypothesis.toLowerCase()}.</p>
@@ -539,7 +545,7 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, d
           </CardFooter>
         </Card>
 
-        {verifyResult && (
+        {verifyResult && active && (
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
               <div>
@@ -1009,6 +1015,8 @@ export default function App() {
           setScenario={(s) => {
             setScenario(s)
             setActive(s !== 'normal')
+            setVerified(false)
+            setVerifyResult(null)
           }}
         />
       )
