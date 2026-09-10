@@ -62,6 +62,14 @@ def test_whatif():
     assert r_dem.json()["before"]["loss"] == 0 and r_dem.json()["lossReductionPct"] == 0.0
 
 
+def test_incidents_fallback():
+    # Without SUPABASE env locally, must fall back to mock list (demo never breaks).
+    r = client.get("/api/incidents")
+    j = r.json()
+    assert r.status_code == 200 and len(j["incidents"]) >= 3
+    assert j.get("source") in ("mock", "supabase")
+
+
 if __name__ == "__main__":
     for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):
         fn()

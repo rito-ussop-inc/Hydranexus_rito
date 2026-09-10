@@ -12,6 +12,7 @@ from .schemas import DetectRequest, VerifyRequest, WhatIfRequest
 from .simulator import generate_telemetry, simulate_expected, rmse, to_dataframe
 from .topology import graph_payload
 from .ai import analyze, get_model
+from . import db as incident_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,7 +39,8 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "hydranexus-api", "version": "0.1.0", "mode": "simulated"}
+    return {"status": "ok", "service": "hydranexus-api", "version": "0.1.0", "mode": "simulated",
+            "db": "supabase" if incident_db.is_configured() else "mock"}
 
 
 @app.get("/api/network/graph")
@@ -68,7 +70,18 @@ INCIDENT_HISTORY = [
 
 @app.get("/api/incidents")
 def incidents():
-    return {"incidents": INCIDENT_HISTORY}
+    rows = incident_db.get_incidents()
+    if rows:
+        return {"incidents": rows, "source": "supabase"}
+    return {"incidents": INCIDENT_HISTORY, "source": "mock"}
+
+
+@app.post("/api/incidents")
+def create_incident(item: dict):
+    ok = incident_db.save_incident(item)
+    if not ok:
+        raise HTTPException(status_code=503, detail="incident store unavailable (no SUPABASE env or DB unreachable)")
+    return {"saved": True, "id": item.get("id")}
 
 
 @app.post("/api/ai/detect")
@@ -77,6 +90,26 @@ def ai_detect(body: DetectRequest):
         result = analyze([p.model_dump() for p in body.telemetry])
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    # Auto-file HIGH/MEDIUM anomalies to Supabase (fire-and-forget, never breaks demo).
+    try:
+        if result.get("severity") in ("HIGH", "MEDIUM"):
+            import datetime
+            loc = result.get("location", {})
+            incident_db.save_incident({
+                "id": f"INC-{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                "title": f"Probable {result.get('primaryHypothesis', 'anomaly').lower()}",
+                "type": result.get("primaryHypothesis", "Leak").split()[-1],
+                "location": loc.get("segment", "B2 → B3"),
+                "zone": f"Zone {loc.get('zone', 'B')}",
+                "severity": result.get("severity"),
+                "status": "Investigating",
+                "confidence": result.get("confidence"),
+                "lossPerHour": result.get("impact", {}).get("lossPerHour"),
+                "started": datetime.datetime.utcnow().strftime("%H:%M UTC"),
+                "evidence": result.get("evidence", [])[:6],
+            })
+    except Exception:
+        pass
     return result
 
 

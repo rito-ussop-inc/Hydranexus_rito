@@ -20,7 +20,7 @@ import {
   sensorTelemetry,
   whatIfOptions,
 } from './data'
-import { checkHealth, fetchTelemetry, postDetect, postVerify, postWhatIf } from './api'
+import { checkHealth, fetchTelemetry, postDetect, postVerify, postWhatIf, fetchIncidents } from './api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 function VerifyChart({ observed, simulated }) {
@@ -825,15 +825,37 @@ function WhatIfPage({ active, data, scenario = 'leak' }) {
 
 function HistoryPage({ setPage }) {
   const [filter, setFilter] = useState('')
-  const rows = incidents.filter(
-    (i) => i.title.toLowerCase().includes(filter.toLowerCase()) || i.id.toLowerCase().includes(filter.toLowerCase())
+  const [rows, setRows] = useState(incidents)
+  const [source, setSource] = useState('mock')
+  useEffect(() => {
+    let cancelled = false
+    fetchIncidents()
+      .then((j) => {
+        if (!cancelled && j?.incidents?.length) {
+          setRows(j.incidents)
+          setSource(j.source ?? 'supabase')
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const filtered = rows.filter(
+    (i) => (i.title || '').toLowerCase().includes(filter.toLowerCase()) || (i.id || '').toLowerCase().includes(filter.toLowerCase())
   )
   return (
     <div className="space-y-4">
       <PageSection
         eyebrow="History"
         title="Incidents"
-        action={<Input placeholder="Search…" value={filter} onChange={(e) => setFilter(e.target.value)} className="max-w-[180px]" />}
+        description={source === 'supabase' ? 'Live Supabase register — auto-filed by AI.' : 'Cached mock register (DB offline).'}
+        action={
+          <div className="flex items-center gap-2">
+            {source === 'supabase' ? <Badge variant="secondary">Live DB</Badge> : <Badge variant="outline">Mock fallback</Badge>}
+            <Input placeholder="Search…" value={filter} onChange={(e) => setFilter(e.target.value)} className="max-w-[180px]" />
+          </div>
+        }
       >
         <Card>
           <CardContent className="pt-4">
@@ -849,7 +871,7 @@ function HistoryPage({ setPage }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((item) => (
+                {filtered.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
                       <div className="font-medium">{item.id}</div>
