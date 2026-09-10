@@ -20,7 +20,7 @@ import {
   sensorTelemetry,
   whatIfOptions,
 } from './data'
-import { checkHealth, fetchTelemetry, postVerify } from './api'
+import { checkHealth, fetchTelemetry, postDetect, postVerify } from './api'
 
 const pageMeta = {
   overview: ['Overview', 'Network health and active incidents.'],
@@ -346,41 +346,93 @@ function MonitoringPage({ scenario, setScenario }) {
 
 /* ------------------------------ Investigation ---------------------------- */
 
-function InvestigationPage({ active, verify, verified, onExport }) {
-  const incident = incidents[0]
+function InvestigationPage({ active, verify, verified, onExport, data, scenario }) {
+  const fallback = incidents[0]
+  const [ai, setAi] = useState(null)
+  const [live, setLive] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!active && scenario === 'normal') {
+      setAi(null)
+      setLive(false)
+      return
+    }
+    const payload = data && data.length ? data : fallback ? [] : []
+    if (!payload.length) return
+    postDetect(payload)
+      .then((res) => {
+        if (!cancelled) {
+          setAi(res)
+          setLive(true)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAi(null)
+          setLive(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [active, scenario, data])
+
+  const causes = ai?.causes?.map((c) => [c.cause, c.score]) ?? fallback.causes
+  const evidence = ai?.evidence ?? fallback.evidence
+  const flowChg = ai?.deviation_pct ? `${ai.deviation_pct.flow >= 0 ? '+' : ''}${ai.deviation_pct.flow.toFixed(1)}%` : `+${fallback.flowChange}%`
+  const pressChg = ai?.deviation_pct ? `${ai.deviation_pct.pressure >= 0 ? '+' : ''}${ai.deviation_pct.pressure.toFixed(1)}%` : `${fallback.pressureChange}%`
+  const segment = ai?.location?.segment ?? fallback.location
+  const locConf = ai?.location?.confidence ?? fallback.confidence
+  const hypothesis = ai?.primaryHypothesis ?? fallback.title.replace('Probable ', '').replace('Possible ', '')
+  const severity = ai?.severity ?? fallback.severity
+  const anomalyScore = ai?.anomalyScore ?? null
   return (
     <div className="space-y-4">
       <PageSection
         eyebrow="Investigation"
         title="Why is the network abnormal?"
-        action={verified ? <Badge variant="secondary">Verified</Badge> : <Badge variant="outline">Needs verification</Badge>}
+        action={
+          <div className="flex gap-2">
+            {live ? <Badge variant="secondary">Live AI</Badge> : <Badge variant="outline">Mock fallback</Badge>}
+            {verified ? <Badge variant="secondary">Verified</Badge> : <Badge variant="outline">Needs verification</Badge>}
+          </div>
+        }
       >
         <div className="grid gap-4 xl:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-medium">Incident snapshot</CardTitle>
-              <CardDescription>{active ? `${incident.location} · ${incident.zone}` : 'No active incident'}</CardDescription>
+              <CardDescription>{active ? `${segment} · ${ai ? `Zone ${ai.location?.zone}` : fallback.zone}` : 'No active incident'}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {active ? (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{incident.title}</span>
-                    <Badge variant="destructive">High</Badge>
+                    <span className="text-sm font-medium">{hypothesis}</span>
+                    <Badge variant={severity === 'HIGH' ? 'destructive' : 'outline'}>{severity}</Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Stat label="Flow change" value="+31%" alert />
-                    <Stat label="Pressure change" value="−17%" alert />
+                    <Stat label="Flow change" value={flowChg} alert />
+                    <Stat label="Pressure change" value={pressChg} alert />
                   </div>
                   <Separator />
                   <dl className="space-y-1.5 text-sm">
                     <div className="flex justify-between">
                       <dt className="text-muted-foreground">Probable location</dt>
-                      <dd className="font-medium">B2 → B3 (81% confidence)</dd>
+                      <dd className="font-medium">{segment} ({locConf}% confidence)</dd>
                     </div>
                     <div className="flex justify-between">
                       <dt className="text-muted-foreground">Primary hypothesis</dt>
-                      <dd className="font-medium">Pipeline leak</dd>
+                      <dd className="font-medium">{hypothesis}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">ML anomaly score</dt>
+                      <dd className="font-medium">{anomalyScore != null ? anomalyScore.toFixed(2) : '—'}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Confidence</dt>
+                      <dd className="font-medium">{ai?.confidence ?? fallback.confidence}%</dd>
                     </div>
                   </dl>
                 </>
@@ -393,10 +445,10 @@ function InvestigationPage({ active, verify, verified, onExport }) {
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-medium">Possible causes</CardTitle>
-              <CardDescription>Ranked by the hybrid ML + rules model</CardDescription>
+              <CardDescription>Ranked by the hybrid ML + rules model{live ? ' (live)' : ' (mock)'}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {incident.causes.map(([cause, score]) => (
+              {causes.map(([cause, score]) => (
                 <div key={cause}>
                   <div className="flex items-center justify-between text-sm">
                     <span>{cause}</span>
@@ -414,9 +466,10 @@ function InvestigationPage({ active, verify, verified, onExport }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">Evidence</CardTitle>
+            <CardDescription>{live ? 'Backend evidence with deviation + topology' : 'Cached mock evidence'}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {incident.evidence.map((item) => (
+            {evidence.map((item) => (
               <div key={item} className="flex gap-2 text-sm text-muted-foreground">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                 <span>{item}</span>
@@ -424,7 +477,7 @@ function InvestigationPage({ active, verify, verified, onExport }) {
             ))}
           </CardContent>
           <CardFooter className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">Compare the observed pattern with a simulated B2 → B3 leak.</p>
+            <p className="text-xs text-muted-foreground">Compare the observed pattern with a simulated {segment} {hypothesis.toLowerCase()}.</p>
             <div className="flex gap-2">
               <Button size="sm" variant={verified ? 'secondary' : 'default'} onClick={verify}>
                 {verified ? 'Verified' : 'Verify scenario'}
@@ -780,7 +833,7 @@ export default function App() {
           }}
         />
       )
-    if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} onExport={exportReport} />
+    if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} onExport={exportReport} data={data} scenario={scenario} />
     if (page === 'impact') return <ImpactPage active={active} />
     if (page === 'whatif') return <WhatIfPage active={active} />
     if (page === 'history') return <HistoryPage setPage={setPage} />

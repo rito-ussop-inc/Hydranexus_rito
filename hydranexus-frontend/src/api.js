@@ -12,6 +12,15 @@ function resolveBase() {
   if (fromEnv) return fromEnv.replace(/\/$/, '')
   try {
     const host = window?.location?.hostname
+    const proto = window?.location?.protocol
+    // Production (Vercel https) -> Render backend. Avoids mixed-content
+    // http://host:8000 which fails on https vercel.app.
+    if (host && (host.includes('vercel.app') || host.includes('hydra-nexus'))) {
+      return 'https://hydranexus-api.onrender.com'
+    }
+    if (host && proto === 'https:') {
+      return 'https://hydranexus-api.onrender.com'
+    }
     if (host) return `http://${host}:8000`
   } catch { /* non-browser (SSR/tests) -> fallback below */ }
   return 'http://localhost:8000'
