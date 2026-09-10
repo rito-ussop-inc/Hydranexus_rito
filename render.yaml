@@ -15,3 +15,9 @@ services:
       # Render-supported Python; the code needs 3.10+ (X | Y annotations).
       - key: PYTHON_VERSION
         value: 3.12.7
+      # Supabase incident-history DB (non-secret URL lives in repo;
+      # secret key is set in dashboard after push — never committed).
+      - key: SUPABASE_URL
+        value: https://cgsujqsdpvfbwmtbilvd.supabase.co
+      - key: SUPABASE_KEY
+        sync: false
