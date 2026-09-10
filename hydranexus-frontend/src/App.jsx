@@ -21,6 +21,30 @@ import {
   whatIfOptions,
 } from './data'
 import { checkHealth, fetchTelemetry, postDetect, postVerify, postWhatIf } from './api'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+
+function VerifyChart({ observed, simulated }) {
+  const rows = (observed || []).map((o, i) => ({
+    time: o.time,
+    observedFlow: o.flow,
+    simulatedFlow: simulated?.[i]?.flow ?? null,
+  }))
+  return (
+    <div className="h-56 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={rows} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
+          <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="time" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={55} />
+          <Tooltip />
+          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Line type="monotone" dataKey="observedFlow" name="Observed flow" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="simulatedFlow" name="Simulated hypothesis" stroke="#16a34a" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
 
 const pageMeta = {
   overview: ['Overview', 'Network health and active incidents.'],
@@ -82,16 +106,39 @@ function Toast({ toast, onClose }) {
 
 /* ------------------------------- Overview ------------------------------- */
 
-function Overview({ active, data, setPage, trigger, onExport }) {
-  const flow = active ? 11500 : 8180
-  const pressure = active ? 3.3 : 4.0
+function Overview({ active, data, scenario, setPage, trigger, onExport }) {
+  const last = data?.at(-1)
+  const [ai, setAi] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    if (!active || !last) {
+      setAi(null)
+      return
+    }
+    postDetect(data)
+      .then((res) => {
+        if (!cancelled) setAi(res)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [active, scenario])
+  const flow = last?.flow ?? (active ? 11500 : 8180)
+  const pressure = last?.pressure ?? (active ? 3.3 : 4.0)
+  const loss = ai?.impact?.lossPerHour ?? (active ? 3500 : 0)
+  const hypothesis = ai?.primaryHypothesis ?? 'Probable pipeline leak'
+  const segment = ai?.location?.segment ?? 'B2 → B3'
+  const zone = ai?.location?.zone ? `Zone ${ai.location.zone}` : 'Zone B'
+  const confidence = ai?.confidence ?? 76
+  const severity = ai?.severity ?? 'HIGH'
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Status" value={active ? 'Investigating' : 'Normal'} hint={active ? '1 high-severity incident' : 'Within baseline'} alert={active} />
-        <Stat label="Flow" value={`${fmt(flow)} L/hr`} hint="Baseline ≈ 8,000 L/hr" alert={active} />
-        <Stat label="Avg. pressure" value={`${pressure.toFixed(1)} bar`} hint="Baseline ≈ 4.0 bar" alert={active} />
-        <Stat label="Est. loss" value={active ? '3,500 L/hr' : '0 L/hr'} hint={active ? 'Potential leak' : 'No active loss'} alert={active} />
+        <Stat label="Status" value={active ? 'Investigating' : 'Normal'} hint={active ? `1 ${severity.toLowerCase()}-severity incident (${scenario})` : 'Within baseline'} alert={active} />
+        <Stat label="Flow" value={`${fmt(Math.round(flow))} L/hr`} hint="Baseline ≈ 8,000 L/hr" alert={flow > 9000} />
+        <Stat label="Avg. pressure" value={`${Number(pressure).toFixed(1)} bar`} hint="Baseline ≈ 4.0 bar" alert={pressure < 3.6} />
+        <Stat label="Est. loss" value={`${fmt(Math.round(loss))} L/hr`} hint={active ? `Potential ${hypothesis.toLowerCase()}` : 'No active loss'} alert={active && loss > 500} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -113,24 +160,24 @@ function Overview({ active, data, setPage, trigger, onExport }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">{active ? 'Active incident' : 'No active incident'}</CardTitle>
-            <CardDescription>{active ? 'B2 → B3 · Zone B · INC-1048' : 'System nominal'}</CardDescription>
+            <CardDescription>{active ? `${segment} · ${zone} · ${scenario}` : 'System nominal'}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {active ? (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm">Probable pipeline leak</span>
-                  <Badge variant="destructive">High</Badge>
+                  <span className="text-sm">{hypothesis}</span>
+                  <Badge variant={severity === 'HIGH' ? 'destructive' : 'outline'}>{severity}</Badge>
                 </div>
                 <Separator />
                 <dl className="space-y-1.5 text-sm">
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">Confidence</dt>
-                    <dd className="font-medium">76%</dd>
+                    <dd className="font-medium">{confidence}%</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">Est. loss</dt>
-                    <dd className="font-medium">3,500 L/hr</dd>
+                    <dd className="font-medium">{fmt(Math.round(loss))} L/hr</dd>
                   </div>
                 </dl>
                 <div className="flex gap-2 pt-1">
@@ -166,7 +213,7 @@ function Overview({ active, data, setPage, trigger, onExport }) {
       <PageSection eyebrow="Zones" title="Zone health">
         <div className="grid gap-3 md:grid-cols-3">
           {zones.map((zone) => {
-            const critical = active && zone.id === 'B'
+            const critical = active && ai ? zone.id === ai.location?.zone : active && zone.id === 'B'
             return (
               <Card key={zone.id}>
                 <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
@@ -181,7 +228,7 @@ function Overview({ active, data, setPage, trigger, onExport }) {
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">Pressure</dt>
-                      <dd className="font-medium">{(critical ? 3.3 : zone.pressure).toFixed(1)} bar</dd>
+                      <dd className="font-medium">{(critical && pressure ? Number(pressure).toFixed(1) : zone.pressure.toFixed(1))} bar</dd>
                     </div>
                   </dl>
                   <p className="mt-2 text-xs text-muted-foreground">
@@ -346,7 +393,7 @@ function MonitoringPage({ scenario, setScenario }) {
 
 /* ------------------------------ Investigation ---------------------------- */
 
-function InvestigationPage({ active, verify, verified, onExport, data, scenario }) {
+function InvestigationPage({ active, verify, verified, verifyResult, onExport, data, scenario }) {
   const fallback = incidents[0]
   const [ai, setAi] = useState(null)
   const [live, setLive] = useState(false)
@@ -488,6 +535,26 @@ function InvestigationPage({ active, verify, verified, onExport, data, scenario 
             </div>
           </CardFooter>
         </Card>
+
+        {verifyResult && (
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-sm font-medium">Scenario verification — observed vs simulated</CardTitle>
+                <CardDescription>
+                  {verifyResult.hypothesis} at {verifyResult.segment} · {verifyResult.matchScore}% match ({verifyResult.evidenceStrength})
+                </CardDescription>
+              </div>
+              <Badge variant={verifyResult.verified ? 'secondary' : 'outline'}>
+                {verifyResult.verified ? 'SUPPORTED' : 'WEAK'}
+              </Badge>
+            </CardHeader>
+            <CardContent>
+              <VerifyChart observed={data} simulated={verifyResult.simulated} />
+              <p className="mt-2 text-xs text-muted-foreground">{verifyResult.explanation}</p>
+            </CardContent>
+          </Card>
+        )}
       </PageSection>
     </div>
   )
@@ -845,6 +912,7 @@ export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [scenario, setScenario] = useState('normal')
   const [verified, setVerified] = useState(false)
+  const [verifyResult, setVerifyResult] = useState(null)
   const [toast, setToast] = useState(null)
 
   const data = useMemo(
@@ -866,6 +934,7 @@ export default function App() {
     setActive(next)
     setScenario(next ? 'leak' : 'normal')
     setVerified(false)
+    setVerifyResult(null)
     setToast({
       message: next ? 'Leak anomaly detected on segment B2 → B3.' : 'Returned to normal baseline.',
       type: next ? 'danger' : 'success',
@@ -875,9 +944,13 @@ export default function App() {
   const doVerify = async () => {
     setVerified(true)
     try {
-      const res = await postVerify(data, scenario === 'normal' ? 'leak' : scenario, 'B2 → B3')
+      const hypothesisMap = { leak: 'leak', burst: 'burst', demand: 'demand', sensor: 'sensor' }
+      const hypothesis = hypothesisMap[scenario] ?? 'leak'
+      const res = await postVerify(data, hypothesis, 'B2 → B3')
+      setVerifyResult(res)
       setToast({ message: `Verification: ${res.matchScore}% (${res.evidenceStrength}).`, type: res.verified ? 'success' : 'info' })
     } catch {
+      setVerifyResult(null)
       setToast({ message: 'Verified against the local mock model.', type: 'success' })
     }
   }
@@ -901,7 +974,7 @@ export default function App() {
 
   const meta = pageMeta[page]
   const render = () => {
-    if (page === 'overview') return <Overview active={active} data={data} setPage={setPage} trigger={trigger} onExport={exportReport} />
+    if (page === 'overview') return <Overview active={active} data={data} scenario={scenario} setPage={setPage} trigger={trigger} onExport={exportReport} />
     if (page === 'network') return <NetworkPage active={active} />
     if (page === 'monitoring')
       return (
@@ -913,7 +986,7 @@ export default function App() {
           }}
         />
       )
-    if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} onExport={exportReport} data={data} scenario={scenario} />
+    if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} verifyResult={verifyResult} onExport={exportReport} data={data} scenario={scenario} />
     if (page === 'impact') return <ImpactPage active={active} data={data} scenario={scenario} />
     if (page === 'whatif') return <WhatIfPage active={active} />
     if (page === 'history') return <HistoryPage setPage={setPage} />
