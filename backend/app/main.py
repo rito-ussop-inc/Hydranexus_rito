@@ -163,22 +163,51 @@ def whatif(body: WhatIfRequest):
     key = (body.scenario or "isolate")
     if key not in WHATIF_CATALOG:
         raise HTTPException(status_code=400, detail=f"unknown scenario '{key}'. Choose {sorted(WHATIF_CATALOG)}")
+    incident = (body.incident or "leak").lower()
+    # Baseline loss per incident type; frontend may override with live estimate.
+    incident_defaults = {"leak": 3500, "burst": 7000, "demand": 0, "sensor": 0, "normal": 0}
+    if body.baselineLoss is not None:
+        base = max(0.0, float(body.baselineLoss))
+    else:
+        base = float(incident_defaults.get(incident, 3500))
     item = WHATIF_CATALOG[key]
-    after_loss = item["after"]["loss"]
+    scale = base / 3500.0 if base > 0 else 0.0
+    before = {**item["before"], "loss": round(base)}
+    if base <= 0:
+        # No pipe loss (demand spike / sensor fault): interventions save no water.
+        after = {**item["after"], "loss": 0}
+        notes = (
+            f"No pipe water-loss for '{incident}' — metered use or sensor error, not leakage. "
+            f"{item['label']} would disrupt {item['after']['users']} users with 0 L/hr saved. Monitoring recommended."
+            if item["after"]["users"] > 0 else
+            f"No pipe water-loss for '{incident}'. {item['label']} saves 0 L/hr. Monitoring recommended."
+        )
+        return {
+            "scenario": key,
+            "incident": incident,
+            "label": item["label"],
+            "before": before,
+            "after": after,
+            "lossReductionPct": 0.0,
+            "notes": notes,
+            "operatorNote": "Simulation is advisory. Human operator decides and remains accountable.",
+        }
+    after_loss = round(item["after"]["loss"] * scale)
     # PRV throttle interpolates loss (mirrors frontend WhatIfPage logic)
     if key == "reducePressure":
         throttle = max(0.0, min(100.0, float(body.valveThrottle or 50)))
         factor = (100 - throttle) / 100.0
-        after_loss = round(3500 * (0.45 + factor * 0.55))
-    before_loss = item["before"]["loss"]
+        after_loss = round(base * (0.45 + factor * 0.55))
+    before_loss = round(base)
     reduction = round((before_loss - after_loss) / before_loss * 100, 1) if before_loss else 0.0
     return {
         "scenario": key,
+        "incident": incident,
         "label": item["label"],
-        "before": item["before"],
+        "before": before,
         "after": {**item["after"], "loss": after_loss},
         "lossReductionPct": reduction,
-        "notes": item["notes"],
+        "notes": item["notes"] + f" Scaled to {incident} baseline ({before_loss:,} L/hr).",
         "operatorNote": "Simulation is advisory. Human operator decides and remains accountable.",
     }
 

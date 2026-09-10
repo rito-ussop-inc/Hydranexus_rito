@@ -53,6 +53,13 @@ def test_whatif():
     assert r.json()["lossReductionPct"] > 80
     r = client.post("/api/whatif", json={"scenario": "reducePressure", "valveThrottle": 50})
     assert r.status_code == 200
+    # Scenario-aware scaling: burst baseline is larger than leak
+    r_leak = client.post("/api/whatif", json={"scenario": "isolate", "incident": "leak"})
+    r_burst = client.post("/api/whatif", json={"scenario": "isolate", "incident": "burst"})
+    assert r_burst.json()["before"]["loss"] > r_leak.json()["before"]["loss"]
+    # Demand has no pipe loss
+    r_dem = client.post("/api/whatif", json={"scenario": "isolate", "incident": "demand"})
+    assert r_dem.json()["before"]["loss"] == 0 and r_dem.json()["lossReductionPct"] == 0.0
 
 
 if __name__ == "__main__":

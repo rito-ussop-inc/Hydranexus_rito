@@ -649,14 +649,31 @@ function ImpactPage({ active, data, scenario }) {
 
 /* --------------------------------- What-If ------------------------------- */
 
-function WhatIfPage({ active }) {
+function WhatIfPage({ active, data, scenario = 'leak' }) {
   const [option, setOption] = useState('isolate')
   const [ran, setRan] = useState(false)
   const [throttle, setThrottle] = useState(50)
   const [result, setResult] = useState(null)
   const [live, setLive] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [baselineLoss, setBaselineLoss] = useState(null)
   const chosen = whatIfOptions[option]
+
+  useEffect(() => {
+    let cancelled = false
+    if (!active || !data?.length) {
+      setBaselineLoss(null)
+      return
+    }
+    postDetect(data)
+      .then((res) => {
+        if (!cancelled) setBaselineLoss(res?.impact?.lossPerHour ?? null)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [active, scenario])
 
   const fallbackAfterLoss = useMemo(() => {
     if (option === 'reducePressure') {
@@ -677,7 +694,7 @@ function WhatIfPage({ active }) {
   const run = async () => {
     setLoading(true)
     try {
-      const res = await postWhatIf(option, throttle)
+      const res = await postWhatIf(option, throttle, scenario, baselineLoss)
       setResult(res)
       setLive(true)
     } catch {
@@ -704,7 +721,13 @@ function WhatIfPage({ active }) {
       <PageSection
         eyebrow="Decision support"
         title="What-If Studio"
-        description={ran ? (live ? 'Live Render backend result.' : 'Cached mock result.') : 'Simulated outcomes. Operator controlled.'}
+        description={
+          ran
+            ? live
+              ? `Live Render backend result for ${scenario} (baseline ${baselineLoss != null ? `${fmt(Math.round(baselineLoss))} L/hr` : '…' }).`
+              : 'Cached mock result.'
+            : `Simulated outcomes for ${scenario}. Operator controlled.`
+        }
         action={
           <div className="flex gap-2">
             {ran && (live ? <Badge variant="secondary">Live API</Badge> : <Badge variant="outline">Mock fallback</Badge>)}
@@ -991,7 +1014,7 @@ export default function App() {
       )
     if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} verifyResult={verifyResult} onExport={exportReport} data={data} scenario={scenario} />
     if (page === 'impact') return <ImpactPage active={active} data={data} scenario={scenario} />
-    if (page === 'whatif') return <WhatIfPage active={active} />
+    if (page === 'whatif') return <WhatIfPage active={active} data={data} scenario={scenario} />
     if (page === 'history') return <HistoryPage setPage={setPage} />
     return <SettingsPage />
   }

@@ -25,3 +25,5 @@ class VerifyRequest(BaseModel):
 class WhatIfRequest(BaseModel):
     scenario: str = Field(default="isolate", description="isolate|reducePressure|bypassRoute|doNothing")
     valveThrottle: Optional[float] = Field(default=50, description="0..100, only for reducePressure")
+    incident: Optional[str] = Field(default="leak", description="leak|burst|demand|sensor|normal")
+    baselineLoss: Optional[float] = Field(default=None, description="current estimated loss L/hr from /api/ai/detect")

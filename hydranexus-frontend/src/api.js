@@ -93,11 +93,11 @@ export async function fetchImpact(scenario = 'leak', points = 8) {
   return j
 }
 
-export async function postWhatIf(scenario = 'isolate', valveThrottle = 50) {
+export async function postWhatIf(scenario = 'isolate', valveThrottle = 50, incident = 'leak', baselineLoss = null) {
   const j = await fetchJson('/api/whatif', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scenario, valveThrottle }),
+    body: JSON.stringify({ scenario, valveThrottle, incident, baselineLoss }),
   })
   return j
 }
