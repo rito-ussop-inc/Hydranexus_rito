@@ -66,12 +66,25 @@ export async function fetchGraph(incidentActive = false) {
 }
 
 export async function postDetect(telemetry) {
-  const j = await fetchJson('/api/ai/detect', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ telemetry }),
-  })
-  return j
+  // Retry once with longer timeout: Render free tier cold-starts can exceed 4s.
+  let lastErr = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const j = await fetchJson(
+        '/api/ai/detect',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ telemetry }),
+        },
+        10000
+      )
+      return j
+    } catch (e) {
+      lastErr = e
+    }
+  }
+  throw lastErr ?? new Error('detect failed')
 }
 
 export async function fetchAlerts(scenario = 'leak', points = 8) {
