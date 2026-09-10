@@ -88,6 +88,11 @@ export async function postVerify(observed, hypothesis = 'leak', segment = 'B2 â†
   return j
 }
 
+export async function fetchImpact(scenario = 'leak', points = 8) {
+  const j = await fetchJson(`/api/impact?scenario=${encodeURIComponent(scenario)}&points=${points}`)
+  return j
+}
+
 export async function postWhatIf(scenario = 'isolate', valveThrottle = 50) {
   const j = await fetchJson('/api/whatif', {
     method: 'POST',

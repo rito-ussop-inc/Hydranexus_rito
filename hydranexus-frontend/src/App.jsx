@@ -495,35 +495,81 @@ function InvestigationPage({ active, verify, verified, onExport, data, scenario 
 
 /* --------------------------------- Impact -------------------------------- */
 
-function ImpactPage({ active }) {
+function ImpactPage({ active, data, scenario }) {
+  const fallback = incidents[0]
+  const [impact, setImpact] = useState(null)
+  const [live, setLive] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!active) {
+      setImpact(null)
+      setLive(false)
+      return
+    }
+    const payload = data && data.length ? data : []
+    if (!payload.length) return
+    postDetect(payload)
+      .then((res) => {
+        if (!cancelled) {
+          setImpact(res)
+          setLive(true)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setImpact(null)
+          setLive(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [active, scenario, data])
+
   if (!active) {
     return (
       <Card>
         <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          No active incident. Trigger the simulated leak to populate the impact assessment.
+          No active incident. Trigger the simulated incident or pick burst / demand / sensor in Telemetry to populate the impact assessment.
         </CardContent>
       </Card>
     )
   }
+  const loss = impact?.impact?.lossPerHour ?? fallback.lossPerHour
+  const loss24 = impact?.impact?.loss24h ?? fallback.loss24h
+  const zone = impact?.impact?.affectedZone ?? fallback.zone
+  const users = impact?.impact?.affectedUsers ?? 560
+  const severity = impact?.severity ?? fallback.severity
   return (
     <div className="space-y-4">
-      <PageSection eyebrow="Impact" title="Operational impact" description="Loss, exposure and severity.">
+      <PageSection
+        eyebrow="Impact"
+        title="Operational impact"
+        description={live ? `Live backend estimate (${scenario}).` : 'Cached mock estimate.'}
+        action={live ? <Badge variant="secondary">Live AI</Badge> : <Badge variant="outline">Mock fallback</Badge>}
+      >
         <div className="grid gap-3 md:grid-cols-3">
-          <Stat label="Est. loss" value="3,500 L/hr" alert />
-          <Stat label="24-hour projection" value="84,000 L" alert />
-          <Stat label="Affected zone" value="Zone B" hint="560 users" />
+          <Stat label="Est. loss" value={`${fmt(Math.round(loss))} L/hr`} alert={loss > 500} />
+          <Stat label="24-hour projection" value={`${fmt(Math.round(loss24))} L`} alert={loss > 500} />
+          <Stat label="Affected zone" value={zone} hint={`${users} users`} />
         </div>
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>
-              <CardTitle className="text-sm font-medium">Priority: High</CardTitle>
-              <CardDescription>Immediate investigation recommended.</CardDescription>
+              <CardTitle className="text-sm font-medium">Priority: {severity}</CardTitle>
+              <CardDescription>
+                {severity === 'HIGH' ? 'Immediate investigation recommended.' : severity === 'MEDIUM' ? 'Schedule inspection.' : 'Monitor baseline.'}
+              </CardDescription>
             </div>
-            <Badge variant="destructive">High</Badge>
+            <Badge variant={severity === 'HIGH' ? 'destructive' : 'outline'}>{severity}</Badge>
           </CardHeader>
           <CardContent className="text-sm leading-6 text-muted-foreground">
-            Loss continues while the incident is unresolved. Isolating B2 → B3 reduces loss but affects Zone B service.
-            Final intervention stays with a qualified operator.
+            {scenario === 'demand'
+              ? 'Consumption-driven rise — no pipe loss. No isolation needed; monitor demand peak.'
+              : scenario === 'burst'
+                ? `Burst-scale loss at ${impact?.location?.segment ?? fallback.location}. Isolate to stop major loss, operator must approve.`
+                : `Loss continues while unresolved. Isolating ${impact?.location?.segment ?? fallback.location} reduces loss but affects ${zone} service. Final intervention stays with a qualified operator.`}
           </CardContent>
         </Card>
       </PageSection>
@@ -769,7 +815,7 @@ export default function App() {
 
   const data = useMemo(
     () =>
-      active || scenario === 'leak'
+      scenario === 'leak'
         ? leakTelemetry
         : scenario === 'burst'
           ? burstTelemetry
@@ -778,7 +824,7 @@ export default function App() {
             : scenario === 'sensor'
               ? sensorTelemetry
               : normalTelemetry,
-    [active, scenario]
+    [scenario]
   )
 
   const trigger = () => {
@@ -829,12 +875,12 @@ export default function App() {
           scenario={scenario}
           setScenario={(s) => {
             setScenario(s)
-            setActive(s === 'leak')
+            setActive(s !== 'normal')
           }}
         />
       )
     if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} onExport={exportReport} data={data} scenario={scenario} />
-    if (page === 'impact') return <ImpactPage active={active} />
+    if (page === 'impact') return <ImpactPage active={active} data={data} scenario={scenario} />
     if (page === 'whatif') return <WhatIfPage active={active} />
     if (page === 'history') return <HistoryPage setPage={setPage} />
     return <SettingsPage />
