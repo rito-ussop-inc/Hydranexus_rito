@@ -20,7 +20,7 @@ import {
   sensorTelemetry,
   whatIfOptions,
 } from './data'
-import { checkHealth, fetchTelemetry, postDetect, postVerify } from './api'
+import { checkHealth, fetchTelemetry, postDetect, postVerify, postWhatIf } from './api'
 
 const pageMeta = {
   overview: ['Overview', 'Network health and active incidents.'],
@@ -583,9 +583,12 @@ function WhatIfPage({ active }) {
   const [option, setOption] = useState('isolate')
   const [ran, setRan] = useState(false)
   const [throttle, setThrottle] = useState(50)
+  const [result, setResult] = useState(null)
+  const [live, setLive] = useState(false)
+  const [loading, setLoading] = useState(false)
   const chosen = whatIfOptions[option]
 
-  const afterLoss = useMemo(() => {
+  const fallbackAfterLoss = useMemo(() => {
     if (option === 'reducePressure') {
       const factor = (100 - throttle) / 100
       return Math.round(3500 * (0.45 + factor * 0.55))
@@ -593,13 +596,34 @@ function WhatIfPage({ active }) {
     return chosen.after.loss
   }, [option, throttle, chosen])
 
-  const reduction = Math.round(((chosen.before.loss - afterLoss) / chosen.before.loss) * 100)
+  const display = result ?? {
+    label: chosen.label,
+    before: chosen.before,
+    after: { ...chosen.after, loss: fallbackAfterLoss },
+    lossReductionPct: Math.round(((chosen.before.loss - fallbackAfterLoss) / chosen.before.loss) * 100),
+    notes: chosen.notes,
+  }
+
+  const run = async () => {
+    setLoading(true)
+    try {
+      const res = await postWhatIf(option, throttle)
+      setResult(res)
+      setLive(true)
+    } catch {
+      setResult(null)
+      setLive(false)
+    } finally {
+      setRan(true)
+      setLoading(false)
+    }
+  }
 
   if (!active) {
     return (
       <Card>
         <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          No active incident. Trigger the simulated leak to enable what-if analysis.
+          No active incident. Trigger the simulated incident or pick burst / demand / sensor in Telemetry to enable what-if analysis.
         </CardContent>
       </Card>
     )
@@ -610,8 +634,13 @@ function WhatIfPage({ active }) {
       <PageSection
         eyebrow="Decision support"
         title="What-If Studio"
-        description="Simulated outcomes. Operator controlled."
-        action={<Badge variant="outline">Advisory only</Badge>}
+        description={ran ? (live ? 'Live Render backend result.' : 'Cached mock result.') : 'Simulated outcomes. Operator controlled.'}
+        action={
+          <div className="flex gap-2">
+            {ran && (live ? <Badge variant="secondary">Live API</Badge> : <Badge variant="outline">Mock fallback</Badge>)}
+            <Badge variant="outline">Advisory only</Badge>
+          </div>
+        }
       >
         <div className="grid gap-4 xl:grid-cols-5">
           <Card className="xl:col-span-2">
@@ -625,6 +654,7 @@ function WhatIfPage({ active }) {
                   onClick={() => {
                     setOption(key)
                     setRan(false)
+                    setResult(null)
                   }}
                   className={`w-full rounded-md border p-3 text-left text-sm transition-colors ${
                     option === key ? 'border-primary bg-accent' : 'hover:bg-accent/50'
@@ -645,13 +675,16 @@ function WhatIfPage({ active }) {
                     min="0"
                     max="100"
                     value={throttle}
-                    onChange={(e) => setThrottle(Number(e.target.value))}
+                    onChange={(e) => {
+                      setThrottle(Number(e.target.value))
+                      setRan(false)
+                    }}
                     className="mt-2 w-full accent-primary"
                   />
                 </div>
               )}
-              <Button className="w-full" onClick={() => setRan(true)}>
-                Run simulation
+              <Button className="w-full" onClick={run} disabled={loading}>
+                {loading ? 'Running…' : 'Run simulation'}
               </Button>
             </CardContent>
           </Card>
@@ -659,26 +692,27 @@ function WhatIfPage({ active }) {
           <Card className="xl:col-span-3">
             <CardHeader>
               <CardTitle className="text-sm font-medium">{ran ? 'Simulated result' : 'Ready'}</CardTitle>
-              <CardDescription>{ran ? chosen.label : 'Select an intervention and run the simulation.'}</CardDescription>
+              <CardDescription>{ran ? display.label : 'Select an intervention and run the simulation.'}</CardDescription>
             </CardHeader>
             {ran && (
               <CardContent className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <Stat label="Loss reduction" value={`${reduction}%`} />
-                  <Stat label="Pressure after" value={`${chosen.after.pressure.toFixed(1)} bar`} />
-                  <Stat label="Users affected" value={chosen.after.users} alert={chosen.after.users > 0} />
+                  <Stat label="Loss reduction" value={`${display.lossReductionPct}%`} />
+                  <Stat label="Pressure after" value={`${display.after.pressure.toFixed(1)} bar`} />
+                  <Stat label="Users affected" value={display.after.users} alert={display.after.users > 0} />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 text-sm">
                   <div className="rounded-md border p-4">
                     <p className="text-xs text-muted-foreground">Before</p>
-                    <p className="mt-1 text-xl font-semibold">{fmt(chosen.before.loss)} <span className="text-xs font-normal text-muted-foreground">L/hr</span></p>
+                    <p className="mt-1 text-xl font-semibold">{fmt(display.before.loss)} <span className="text-xs font-normal text-muted-foreground">L/hr</span></p>
                   </div>
                   <div className="rounded-md border border-primary/30 bg-accent/50 p-4">
                     <p className="text-xs text-muted-foreground">After</p>
-                    <p className="mt-1 text-xl font-semibold">{fmt(afterLoss)} <span className="text-xs font-normal text-muted-foreground">L/hr</span></p>
+                    <p className="mt-1 text-xl font-semibold">{fmt(display.after.loss)} <span className="text-xs font-normal text-muted-foreground">L/hr</span></p>
                   </div>
                 </div>
-                <p className="rounded-md bg-secondary p-3 text-xs leading-5 text-secondary-foreground">{chosen.notes}</p>
+                <p className="rounded-md bg-secondary p-3 text-xs leading-5 text-secondary-foreground">{display.notes}</p>
+                {display.operatorNote && <p className="text-xs text-muted-foreground">{display.operatorNote}</p>}
               </CardContent>
             )}
           </Card>
