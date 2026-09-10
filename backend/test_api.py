@@ -14,7 +14,8 @@ def test_health():
 def test_graph():
     r = client.get("/api/network/graph")
     j = r.json()
-    assert len(j["nodes"]) == 6 and len(j["edges"]) == 5
+    assert len(j["nodes"]) == 8 and len(j["edges"]) == 7
+    assert "tanks" in j and len(j["tanks"]) == 2
 
 
 def test_telemetry_scenarios():

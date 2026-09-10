@@ -263,7 +263,7 @@ function NetworkPage({ active }) {
             <CardTitle className="text-sm font-medium">Components</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5 text-sm">
-            {['Reservoir · Source', 'N1 · Main junction', 'N2 · Zone A', 'N3 · B2 junction', 'N4 · B3 / Zone B', 'N5 · Zone C'].map(
+            {['Reservoir · Source', 'N1 · Main junction', 'N2 · Zone A', 'N3 · B2 junction', 'N4 · B3 / Zone B', 'N5 · Zone C', 'T1 · Tank Zone B', 'T2 · Tank Zone C'].map(
               (item) => (
                 <div key={item} className="flex items-center justify-between border-b py-1.5 last:border-0">
                   <span>{item}</span>
@@ -340,10 +340,11 @@ function MonitoringPage({ scenario, setScenario }) {
           </select>
         }
       >
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Stat label="Flow" value={`${fmt(last.flow)} L/hr`} hint="Expected ≈ 8,000" alert={last.flow > 9000} />
           <Stat label="Pressure" value={`${last.pressure.toFixed(1)} bar`} hint="Expected ≈ 4.0" alert={last.pressure < 3.6} />
           <Stat label="Consumption" value={`${fmt(last.consumption)} L/hr`} hint="Expected ≈ 3,000" alert={last.consumption > 3600} />
+          <Stat label="Tank level" value={`${(last.level ?? 3.2).toFixed(2)} m`} hint="Expected ≈ 3.20" alert={(last.level ?? 3.2) < 2.8} />
         </div>
         <TelemetryCharts data={data} />
         <Card>
@@ -359,6 +360,7 @@ function MonitoringPage({ scenario, setScenario }) {
                   <TableHead>Flow</TableHead>
                   <TableHead>Pressure</TableHead>
                   <TableHead>Consumption</TableHead>
+                  <TableHead>Level</TableHead>
                   <TableHead>Anomaly</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -368,13 +370,14 @@ function MonitoringPage({ scenario, setScenario }) {
                   .slice()
                   .reverse()
                   .map((row) => {
-                    const abnormal = row.flow > 9000 || row.pressure < 3.6 || row.consumption > 3600
+                    const abnormal = row.flow > 9000 || row.pressure < 3.6 || row.consumption > 3600 || (row.level ?? 3.2) < 2.8
                     return (
                       <TableRow key={row.time}>
                         <TableCell className="font-medium">{row.time}</TableCell>
                         <TableCell>{fmt(row.flow)}</TableCell>
                         <TableCell>{row.pressure.toFixed(1)}</TableCell>
                         <TableCell>{fmt(row.consumption)}</TableCell>
+                        <TableCell>{(row.level ?? 3.2).toFixed(2)}</TableCell>
                         <TableCell>{row.anomalyScore?.toFixed(2)}</TableCell>
                         <TableCell>
                           {abnormal ? <Badge variant="destructive">Anomaly</Badge> : <Badge variant="secondary">Normal</Badge>}

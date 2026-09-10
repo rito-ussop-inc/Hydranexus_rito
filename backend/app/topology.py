@@ -4,7 +4,9 @@ Mirrors the frontend mock in `hydranexus-frontend/src/data.js`:
   reservoir -> n1 -> n2 (Zone A)
                 n1 -> n3 (B2 junction)
                       n3 -> n4 (B3 / Zone B)
+                      n3 -> t1 (Tank T1 · Zone B storage)
                 n1 -> n5 (Zone C)
+                      n5 -> t2 (Tank T2 · Zone C storage)
 
 Uses NetworkX for graph queries (neighbors, paths, affected zones).
 Software-first: no SCADA/GIS required; topology is code-defined.
@@ -22,6 +24,8 @@ def build_graph() -> nx.DiGraph:
         ("n3", {"label": "N3 · B2 Junction", "type": "Arterial Feed", "flow": "3,060 L/h", "pressure": "3.9 bar", "zone": "B", "x": 500, "y": 280}),
         ("n4", {"label": "N4 · B3 / Zone B", "type": "High Density", "flow": "6,560 L/h", "pressure": "3.3 bar", "zone": "B", "x": 760, "y": 280}),
         ("n5", {"label": "N5 · Zone C", "type": "Residential", "flow": "2,140 L/h", "pressure": "3.9 bar", "zone": "C", "x": 760, "y": 80}),
+        ("t1", {"label": "T1 · Tank Zone B", "type": "Storage Tank", "flow": "—", "pressure": "—", "level": "3.2 m", "zone": "B", "x": 500, "y": 420}),
+        ("t2", {"label": "T2 · Tank Zone C", "type": "Storage Tank", "flow": "—", "pressure": "—", "level": "3.2 m", "zone": "C", "x": 980, "y": 80}),
     ]
     edges = [
         ("reservoir", "n1", {"id": "e1", "label": "reservoir → n1"}),
@@ -29,6 +33,8 @@ def build_graph() -> nx.DiGraph:
         ("n1", "n3", {"id": "e3", "label": "N1 → B2"}),
         ("n3", "n4", {"id": "e4", "label": "B2 → B3", "segment": "B2 → B3", "zone": "B"}),
         ("n1", "n5", {"id": "e5", "label": "N1 → Zone C"}),
+        ("n3", "t1", {"id": "e6", "label": "B2 → Tank T1"}),
+        ("n5", "t2", {"id": "e7", "label": "Zone C → Tank T2"}),
     ]
     g.add_nodes_from(nodes)
     for u, v, attrs in edges:
@@ -42,6 +48,11 @@ ZONES = [
     {"id": "A", "name": "Zone A", "demand": 1980, "pressure": 4.1, "status": "Normal", "users": 420, "baselineLoss": "0%"},
     {"id": "B", "name": "Zone B", "demand": 3060, "pressure": 3.3, "status": "Critical", "users": 560, "baselineLoss": "18.4%"},
     {"id": "C", "name": "Zone C", "demand": 2140, "pressure": 3.9, "status": "Normal", "users": 380, "baselineLoss": "1.2%"},
+]
+
+TANKS = [
+    {"id": "t1", "name": "Tank T1 · Zone B", "zone": "B", "capacity": "50,000 L", "baselineLevel": 3.2, "feeder": "B2 Junction"},
+    {"id": "t2", "name": "Tank T2 · Zone C", "zone": "C", "capacity": "35,000 L", "baselineLevel": 3.2, "feeder": "Zone C"},
 ]
 
 # Segment metadata used for localization + impact.
@@ -66,7 +77,7 @@ def graph_payload(incident_active: bool = False):
     edges = []
     for u, v, attrs in GRAPH.edges(data=True):
         edges.append({"id": attrs.get("id", f"{u}-{v}"), "source": u, "target": v, **attrs})
-    return {"nodes": nodes, "edges": edges, "zones": ZONES, "segments": SEGMENTS, "incidentActive": incident_active}
+    return {"nodes": nodes, "edges": edges, "zones": ZONES, "tanks": TANKS, "segments": SEGMENTS, "incidentActive": incident_active}
 
 
 def downstream_nodes(node_id: str) -> list[str]:

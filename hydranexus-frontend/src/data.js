@@ -5,42 +5,42 @@ export const zones = [
 ]
 
 export const normalTelemetry = [
-  { time: '08:00', flow: 7900, pressure: 4.1, consumption: 2920, anomalyScore: 0.02 },
-  { time: '09:00', flow: 8050, pressure: 4.0, consumption: 3010, anomalyScore: 0.01 },
-  { time: '10:00', flow: 8120, pressure: 4.0, consumption: 2980, anomalyScore: 0.03 },
-  { time: '11:00', flow: 8200, pressure: 3.9, consumption: 3050, anomalyScore: 0.02 },
-  { time: '12:00', flow: 8100, pressure: 4.0, consumption: 3000, anomalyScore: 0.01 },
-  { time: '13:00', flow: 8150, pressure: 3.9, consumption: 3040, anomalyScore: 0.04 },
-  { time: '14:00', flow: 8200, pressure: 3.9, consumption: 3060, anomalyScore: 0.02 },
-  { time: '15:00', flow: 8180, pressure: 4.0, consumption: 3040, anomalyScore: 0.02 },
+  { time: '08:00', flow: 7900, pressure: 4.1, consumption: 2920, level: 3.22, anomalyScore: 0.02 },
+  { time: '09:00', flow: 8050, pressure: 4.0, consumption: 3010, level: 3.21, anomalyScore: 0.01 },
+  { time: '10:00', flow: 8120, pressure: 4.0, consumption: 2980, level: 3.19, anomalyScore: 0.03 },
+  { time: '11:00', flow: 8200, pressure: 3.9, consumption: 3050, level: 3.2, anomalyScore: 0.02 },
+  { time: '12:00', flow: 8100, pressure: 4.0, consumption: 3000, level: 3.23, anomalyScore: 0.01 },
+  { time: '13:00', flow: 8150, pressure: 3.9, consumption: 3040, level: 3.18, anomalyScore: 0.04 },
+  { time: '14:00', flow: 8200, pressure: 3.9, consumption: 3060, level: 3.21, anomalyScore: 0.02 },
+  { time: '15:00', flow: 8180, pressure: 4.0, consumption: 3040, level: 3.2, anomalyScore: 0.02 },
 ]
 
 export const leakTelemetry = [
   ...normalTelemetry.slice(0, 5),
-  { time: '13:00', flow: 8150, pressure: 3.9, consumption: 3040, anomalyScore: 0.04 },
-  { time: '14:00', flow: 11400, pressure: 3.2, consumption: 3060, anomalyScore: 0.88 },
-  { time: '15:00', flow: 11500, pressure: 3.3, consumption: 3050, anomalyScore: 0.94 },
+  { time: '13:00', flow: 8150, pressure: 3.9, consumption: 3040, level: 3.15, anomalyScore: 0.04 },
+  { time: '14:00', flow: 11400, pressure: 3.2, consumption: 3060, level: 2.75, anomalyScore: 0.88 },
+  { time: '15:00', flow: 11500, pressure: 3.3, consumption: 3050, level: 2.65, anomalyScore: 0.94 },
 ]
 
 export const burstTelemetry = [
   ...normalTelemetry.slice(0, 5),
-  { time: '13:00', flow: 14200, pressure: 2.7, consumption: 3040, anomalyScore: 0.96 },
-  { time: '14:00', flow: 15000, pressure: 2.4, consumption: 3000, anomalyScore: 0.99 },
-  { time: '15:00', flow: 15300, pressure: 2.3, consumption: 2980, anomalyScore: 0.99 },
+  { time: '13:00', flow: 14200, pressure: 2.7, consumption: 3040, level: 2.4, anomalyScore: 0.96 },
+  { time: '14:00', flow: 15000, pressure: 2.4, consumption: 3000, level: 2.1, anomalyScore: 0.99 },
+  { time: '15:00', flow: 15300, pressure: 2.3, consumption: 2980, level: 1.95, anomalyScore: 0.99 },
 ]
 
 export const demandTelemetry = [
   ...normalTelemetry.slice(0, 5),
-  { time: '13:00', flow: 10400, pressure: 3.8, consumption: 4050, anomalyScore: 0.42 },
-  { time: '14:00', flow: 10800, pressure: 3.7, consumption: 4280, anomalyScore: 0.51 },
-  { time: '15:00', flow: 11100, pressure: 3.6, consumption: 4400, anomalyScore: 0.58 },
+  { time: '13:00', flow: 10400, pressure: 3.8, consumption: 4050, level: 2.8, anomalyScore: 0.42 },
+  { time: '14:00', flow: 10800, pressure: 3.7, consumption: 4280, level: 2.6, anomalyScore: 0.51 },
+  { time: '15:00', flow: 11100, pressure: 3.6, consumption: 4400, level: 2.45, anomalyScore: 0.58 },
 ]
 
 export const sensorTelemetry = [
   ...normalTelemetry.slice(0, 5),
-  { time: '13:00', flow: 8200, pressure: 4.0, consumption: 3010, anomalyScore: 0.05 },
-  { time: '14:00', flow: 12100, pressure: 3.9, consumption: 3030, anomalyScore: 0.72 },
-  { time: '15:00', flow: 7900, pressure: 4.0, consumption: 3050, anomalyScore: 0.08 },
+  { time: '13:00', flow: 8200, pressure: 4.0, consumption: 3010, level: 3.2, anomalyScore: 0.05 },
+  { time: '14:00', flow: 12100, pressure: 3.9, consumption: 3030, level: 3.18, anomalyScore: 0.72 },
+  { time: '15:00', flow: 7900, pressure: 4.0, consumption: 3050, level: 3.21, anomalyScore: 0.08 },
 ]
 
 export const incidents = [
@@ -158,6 +158,8 @@ export const networkNodes = [
   { id: 'n3', position: { x: 500, y: 280 }, data: { label: 'N3 · B2 Junction', type: 'Arterial Feed', flow: '3,060 L/h', pressure: '3.9 bar' } },
   { id: 'n4', position: { x: 760, y: 280 }, data: { label: 'N4 · B3 / Zone B', type: 'High Density', flow: '6,560 L/h', pressure: '3.3 bar' } },
   { id: 'n5', position: { x: 760, y: 80 }, data: { label: 'N5 · Zone C', type: 'Residential', flow: '2,140 L/h', pressure: '3.9 bar' } },
+  { id: 't1', position: { x: 500, y: 420 }, data: { label: 'T1 · Tank Zone B', type: 'Storage Tank', level: '3.2 m', pressure: '—' } },
+  { id: 't2', position: { x: 980, y: 80 }, data: { label: 'T2 · Tank Zone C', type: 'Storage Tank', level: '3.2 m', pressure: '—' } },
 ]
 
 export const networkEdges = [
@@ -166,6 +168,8 @@ export const networkEdges = [
   { id: 'e3', source: 'n1', target: 'n3' },
   { id: 'e4', source: 'n3', target: 'n4' },
   { id: 'e5', source: 'n1', target: 'n5' },
+  { id: 'e6', source: 'n3', target: 't1' },
+  { id: 'e7', source: 'n5', target: 't2' },
 ]
 
 export const systemMetrics = {

@@ -4,7 +4,8 @@ Generates realistic normal telemetry with Pandas/NumPy and injects
 controlled failure scenarios: leak, burst, demand spike, sensor fault.
 
 Baseline (matches frontend mock):
-  flow ≈ 8000 L/hr, pressure ≈ 4.0 bar, consumption ≈ 3000 L/hr
+  flow ≈ 8000 L/hr, pressure ≈ 4.0 bar, consumption ≈ 3000 L/hr,
+  level ≈ 3.2 m (elevated storage tank)
 """
 from __future__ import annotations
 import math
@@ -14,6 +15,7 @@ import pandas as pd
 BASE_FLOW = 8000.0
 BASE_PRESSURE = 4.0
 BASE_CONSUMPTION = 3000.0
+BASE_LEVEL = 3.2
 
 SCENARIOS = ("normal", "leak", "burst", "demand", "sensor")
 
@@ -35,6 +37,7 @@ def generate_telemetry(scenario: str = "normal", points: int = 8, seed: int = 7)
     flow = BASE_FLOW + drift + rng.normal(0, 90, points)
     pressure = BASE_PRESSURE + 0.06 * np.cos(2 * np.pi * t / 6.0) + rng.normal(0, 0.05, points)
     consumption = BASE_CONSUMPTION + 60 * np.sin(2 * np.pi * t / 7.0) + rng.normal(0, 55, points)
+    level = BASE_LEVEL + 0.08 * np.sin(2 * np.pi * t / 8.0) + rng.normal(0, 0.04, points)
 
     # Inject failure in the last third (mirrors frontend data.js which diverges at 13:00-15:00)
     fault_start = max(1, (points * 2) // 3)
@@ -42,29 +45,33 @@ def generate_telemetry(scenario: str = "normal", points: int = 8, seed: int = 7)
     k = np.sum(idx)
 
     if scenario == "leak" and k:
-        # +~40% flow, -~0.7 bar pressure, stable consumption
+        # +~40% flow, -~0.7 bar pressure, stable consumption, slow tank drain
         ramp = np.linspace(0.6, 1.0, k)
         flow[idx] += (BASE_FLOW * 0.42) * ramp + rng.normal(0, 80, k)
         pressure[idx] -= 0.75 * ramp + rng.normal(0, 0.03, k) * 0.2
+        level[idx] -= 0.55 * ramp
     elif scenario == "burst" and k:
         ramp = np.linspace(0.8, 1.0, k)
         flow[idx] += (BASE_FLOW * 0.88) * ramp + rng.normal(0, 120, k)
         pressure[idx] -= 1.65 * ramp
+        level[idx] -= 1.25 * ramp
     elif scenario == "demand" and k:
         ramp = np.linspace(0.7, 1.0, k)
         consumption[idx] += 1350 * ramp + rng.normal(0, 60, k)
         flow[idx] += 2700 * ramp + rng.normal(0, 90, k)
         pressure[idx] -= 0.32 * ramp
+        level[idx] -= 0.75 * ramp
     elif scenario == "sensor" and k:
-        # Single-point spike, pressure stable (classic sensor fault signature)
+        # Single-point spike, pressure + level stable (classic sensor fault signature)
         spike_at = fault_start + (k // 2)
         if spike_at < points:
             flow[spike_at] += 3900
-            # pressure deliberately untouched; consumption untouched
+            # pressure deliberately untouched; consumption untouched; level untouched
 
     flow = np.clip(flow, 1000, 18000)
     pressure = np.clip(pressure, 1.5, 5.0)
     consumption = np.clip(consumption, 800, 7000)
+    level = np.clip(level, 0.5, 5.0)
 
     # Provisional anomaly score (refined by AI module with IsolationForest)
     scores = []
@@ -83,6 +90,7 @@ def generate_telemetry(scenario: str = "normal", points: int = 8, seed: int = 7)
             "flow": round(float(flow[i]), 1),
             "pressure": round(float(pressure[i]), 2),
             "consumption": round(float(consumption[i]), 1),
+            "level": round(float(level[i]), 2),
             "anomalyScore": scores[i],
         })
     return out
@@ -93,16 +101,21 @@ def to_dataframe(telemetry: list[dict]) -> pd.DataFrame:
 
 
 def baseline_stats() -> dict:
-    return {"flow": BASE_FLOW, "pressure": BASE_PRESSURE, "consumption": BASE_CONSUMPTION}
+    return {"flow": BASE_FLOW, "pressure": BASE_PRESSURE, "consumption": BASE_CONSUMPTION, "level": BASE_LEVEL}
 
 
 def deviation_pct(observed: dict, baseline: dict | None = None) -> dict:
     b = baseline or baseline_stats()
-    return {
+    out = {
         "flow": (observed["flow"] - b["flow"]) / b["flow"] * 100.0,
         "pressure": (observed["pressure"] - b["pressure"]) / b["pressure"] * 100.0,
         "consumption": (observed["consumption"] - b["consumption"]) / b["consumption"] * 100.0,
     }
+    if observed.get("level") is not None:
+        out["level"] = (observed["level"] - b["level"]) / b["level"] * 100.0
+    else:
+        out["level"] = 0.0
+    return out
 
 
 def estimate_loss(flow: float, consumption: float) -> float:

@@ -37,7 +37,7 @@ export default function NetworkMap({ incidentActive = false, compact = false, on
     ...n,
     data: {
       ...n.data,
-      alert: incidentActive && (n.data.label.includes('B2') || n.data.label.includes('B3')),
+      alert: incidentActive && (n.data.label.includes('B2') || n.data.label.includes('B3') || n.data.label.includes('Tank')),
     },
   }))
 
@@ -98,6 +98,12 @@ export default function NetworkMap({ incidentActive = false, compact = false, on
               <dt>Flow</dt>
               <dd className="text-foreground">{activeNode.data.flow || '—'}</dd>
             </div>
+            {activeNode.data.level && (
+              <div className="flex justify-between">
+                <dt>Tank level</dt>
+                <dd className="text-foreground">{activeNode.data.level}</dd>
+              </div>
+            )}
           </dl>
         </div>
       )}

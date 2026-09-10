@@ -8,6 +8,7 @@ class TelemetryPoint(BaseModel):
     flow: float
     pressure: float
     consumption: float
+    level: Optional[float] = None
     anomalyScore: Optional[float] = 0.0
 
 

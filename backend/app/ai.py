@@ -132,6 +132,7 @@ def severity_for(loss_per_hour: float, pressure: float, anomaly_score: float) ->
 
 
 def build_evidence(latest: dict, dev: dict, causes: list[dict], location: dict) -> list[str]:
+    from .simulator import BASE_LEVEL
     top = causes[0]["cause"] if causes else "Unknown"
     ev = [
         f"Flow {'increased' if dev['flow'] >= 0 else 'decreased'} by {dev['flow']:+.1f}% vs baseline (≈{BASE_FLOW:,.0f} L/hr)",
@@ -141,6 +142,12 @@ def build_evidence(latest: dict, dev: dict, causes: list[dict], location: dict) 
         ev.append(f"End-user metered consumption remained stable ({dev['consumption']:+.1f}%), ruling against a demand-spike pattern")
     else:
         ev.append(f"Metered consumption moved {dev['consumption']:+.1f}%, consistent with demand-side change")
+    lvl = latest.get("level")
+    if lvl is not None:
+        if dev.get("level", 0) < -5:
+            ev.append(f"Storage tank level fell to {lvl:.2f} m vs baseline (≈{BASE_LEVEL:.1f} m), confirming upstream loss/draw")
+        else:
+            ev.append(f"Storage tank level held at {lvl:.2f} m, ruling against a major loss pattern")
     ev.append(f"Adjacent-zone cross-coupling check: anomaly concentrated in Zone {location.get('zone', 'B')} (topology path {location.get('segment')})")
     ev.append(f"Top hypothesis '{top}' scored {causes[0]['score'] if causes else 0}% with ML anomaly index {latest.get('anomalyScore', 0)}")
     return ev
