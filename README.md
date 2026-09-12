@@ -25,8 +25,13 @@ npm install
 npm run dev
 ```
 
+## Live Deployment
+- **Frontend (Vercel):** [https://hydra-nexus.vercel.app](https://hydra-nexus.vercel.app)
+- **Backend (Render):** [https://hydranexus-api.onrender.com](https://hydranexus-api.onrender.com)
+
 ## PRD coverage
 - 3.1 Simulated network: `backend/app/simulator.py` + `topology.py`, visualized in Network Map.
 - 3.2 AI module: `backend/app/ai.py` (detection, ranking, localization, impact).
 - 3.3 Decision support: `POST /api/verify`, `POST /api/whatif`, Investigation + What-If Studio UI.
 - Scalability: Building → Campus → Industrial → Community → District → Municipal (topology is code-defined; swap in GIS/SCADA later).
+
