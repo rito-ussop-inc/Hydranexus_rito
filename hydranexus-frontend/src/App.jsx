@@ -1876,6 +1876,14 @@ export default function App() {
   const [verified, setVerified] = useState(false)
   const [verifyResult, setVerifyResult] = useState(null)
   const [toast, setToast] = useState(null)
+  const [backendOnline, setBackendOnline] = useState(false)
+
+  useEffect(() => {
+    checkHealth()
+      .then((r) => setBackendOnline(r.online))
+      .catch(() => setBackendOnline(false))
+  }, [])
+
   const [showLanding, setShowLanding] = useState(() => {
     if (typeof window !== 'undefined') {
       return !sessionStorage.getItem('hydranexus_briefing_seen')
@@ -2128,6 +2136,7 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
             onMenu={() => setMobileOpen(true)}
             onTrigger={trigger}
             incidentActive={active}
+            backendOnline={backendOnline}
             scenario={scenario}
             onScenarioChange={handleScenarioChange}
             onReplayBriefing={handleReplayBriefing}
