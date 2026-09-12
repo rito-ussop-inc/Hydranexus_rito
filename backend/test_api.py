@@ -97,6 +97,54 @@ def test_whatif():
     assert r_cor.json()["before"]["loss"] == 0 and "inspection" in r_cor.json()["notes"].lower()
 
 
+def test_decision_config():
+    r = client.get("/api/decision/config")
+    j = r.json()
+    assert r.status_code == 200
+    assert len(j["actions"]) == 4
+    assert set(j["costs"]) == {"isolate", "throttle", "reroute", "do_nothing"}
+    assert abs(sum(j["default_weights"].values()) - 1.0) < 0.01
+    assert "planning estimates" in j["cost_basis"].lower()
+
+
+def test_decision_compare_leak():
+    r = client.post("/api/decision/compare", json={"incident": "leak", "severity": "HIGH"})
+    assert r.status_code == 200
+    j = r.json()
+    assert len(j["options"]) == 4
+    scores = [o["score"] for o in j["options"]]
+    assert scores == sorted(scores, reverse=True)
+    assert [o["rank"] for o in j["options"]] == [1, 2, 3, 4]
+    assert all(0 <= s <= 100 for s in scores)
+    assert j["recommended_action"] == j["options"][0]["action"]
+    assert len(j["why"]) >= 3 and len(j["reason"]) > 20
+    assert "simulations" in j and set(j["simulations"]) == {"isolate", "reducePressure", "bypassRoute", "doNothing"}
+    assert j["operatorNote"] and "no intervention is executed" in j["operatorNote"].lower()
+    for o in j["options"]:
+        for field in ("water_loss_reduction", "risk_reduction", "affected_users",
+                      "service_disruption", "estimated_cost_usd", "network_impact", "score"):
+            assert field in o, f"missing {field} in {o['action']}"
+
+
+def test_decision_compare_sensor_prefers_monitoring():
+    r = client.post("/api/decision/compare", json={"incident": "sensor", "severity": "LOW"})
+    j = r.json()
+    assert r.status_code == 200
+    assert j["recommended_action"] == "do_nothing"
+    assert all(o["water_loss_reduction"] == 0 for o in j["options"])
+
+
+def test_decision_compare_throttle_and_weights():
+    r_lo = client.post("/api/decision/compare", json={"incident": "leak", "valveThrottle": 10})
+    r_hi = client.post("/api/decision/compare", json={"incident": "leak", "valveThrottle": 90})
+    lo_throttle = next(o for o in r_lo.json()["options"] if o["action"] == "throttle")
+    hi_throttle = next(o for o in r_hi.json()["options"] if o["action"] == "throttle")
+    assert hi_throttle["water_loss_reduction"] > lo_throttle["water_loss_reduction"]
+    r = client.post("/api/decision/compare",
+                    json={"incident": "leak", "weights": {"water": 0.5, "risk": 0.3, "service": 0.1, "cost": 0.05, "disruption": 0.05}})
+    assert r.status_code == 200 and len(r.json()["options"]) == 4
+
+
 def test_incidents_fallback():
     # Without SUPABASE env locally, must fall back to mock list (demo never breaks).
     r = client.get("/api/incidents")

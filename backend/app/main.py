@@ -8,11 +8,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from .schemas import DetectRequest, VerifyRequest, WhatIfRequest
+from .schemas import DetectRequest, VerifyRequest, WhatIfRequest, DecisionCompareRequest
 from .simulator import generate_telemetry, simulate_expected, rmse, to_dataframe
 from .topology import graph_payload
 from .ai import analyze, get_model
 from . import db as incident_db
+from . import decision as decision_engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -203,27 +204,26 @@ def verify(body: VerifyRequest):
     }
 
 
-@app.post("/api/whatif")
-def whatif(body: WhatIfRequest):
-    key = (body.scenario or "isolate")
+def compute_whatif_result(scenario_key: str, incident: str = "leak",
+                          baseline_loss: float | None = None,
+                          valve_throttle: float = 50.0) -> dict:
+    """Reusable single-scenario simulation (shared by /api/whatif and /api/decision/compare)."""
+    key = scenario_key or "isolate"
     if key not in WHATIF_CATALOG:
-        raise HTTPException(status_code=400, detail=f"unknown scenario '{key}'. Choose {sorted(WHATIF_CATALOG)}")
-    incident = (body.incident or "leak").lower()
-    # Baseline loss per incident type; frontend may override with live estimate.
-    # Demand / sensor / corrosion / normal have no pipe loss by definition.
+        raise ValueError(f"unknown scenario '{key}'. Choose {sorted(WHATIF_CATALOG)}")
+    incident = (incident or "leak").lower()
     incident_defaults = {"leak": 3500, "burst": 7000, "demand": 0, "sensor": 0,
                          "corrosion": 0, "normal": 0}
     if incident in ("demand", "sensor", "corrosion", "normal"):
         base = 0.0
-    elif body.baselineLoss is not None:
-        base = max(0.0, float(body.baselineLoss))
+    elif baseline_loss is not None:
+        base = max(0.0, float(baseline_loss))
     else:
         base = float(incident_defaults.get(incident, 3500))
     item = WHATIF_CATALOG[key]
     scale = base / 3500.0 if base > 0 else 0.0
     before = {**item["before"], "loss": round(base)}
     if base <= 0:
-        # No pipe loss: interventions save no water.
         after = {**item["after"], "loss": 0}
         if incident == "corrosion":
             notes = (
@@ -251,7 +251,7 @@ def whatif(body: WhatIfRequest):
     after_loss = round(item["after"]["loss"] * scale)
     # PRV throttle interpolates loss (mirrors frontend WhatIfPage logic)
     if key == "reducePressure":
-        throttle = max(0.0, min(100.0, float(body.valveThrottle or 50)))
+        throttle = max(0.0, min(100.0, float(valve_throttle if valve_throttle is not None else 50)))
         factor = (100 - throttle) / 100.0
         after_loss = round(base * (0.45 + factor * 0.55))
     before_loss = round(base)
@@ -268,6 +268,53 @@ def whatif(body: WhatIfRequest):
     }
 
 
+@app.post("/api/whatif")
+def whatif(body: WhatIfRequest):
+    """Single-scenario simulation (unchanged behavior; now shares compute_whatif_result)."""
+    try:
+        return compute_whatif_result(body.scenario or "isolate", body.incident or "leak",
+                                     body.baselineLoss, body.valveThrottle or 50)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.get("/api/whatif/options")
 def whatif_options():
     return {"options": WHATIF_CATALOG}
+
+
+@app.get("/api/decision/config")
+def decision_config():
+    """Configurable planning costs + trade-off weights for the decision engine."""
+    return decision_engine.config_payload()
+
+
+@app.post("/api/decision/compare")
+def decision_compare(body: DecisionCompareRequest):
+    """Cost-aware comparison of Isolate / Throttle / Reroute / Do Nothing.
+
+    Reuses the existing What-If simulations, scores the trade-off, ranks the
+    options and explains the recommendation. Advisory only — never executes.
+    """
+    incident = (body.incident or "leak").lower()
+    severity = (body.severity or "HIGH").upper()
+    if severity not in ("HIGH", "MEDIUM", "LOW", "NORMAL"):
+        severity = "HIGH"
+    segment = body.segment or "B2 → B3"
+    throttle = float(body.valveThrottle if body.valveThrottle is not None else 50)
+    incident_defaults = {"leak": 3500, "burst": 7000, "demand": 0, "sensor": 0,
+                         "corrosion": 0, "normal": 0}
+    if body.baselineLoss is not None:
+        baseline = max(0.0, float(body.baselineLoss))
+    else:
+        baseline = float(incident_defaults.get(incident, 3500))
+    sims: dict[str, dict] = {}
+    for scenario_key in ("isolate", "reducePressure", "bypassRoute", "doNothing"):
+        sims[scenario_key] = compute_whatif_result(scenario_key, incident, baseline, throttle)
+    result = decision_engine.compare_options(
+        incident=incident, severity=severity, segment=segment,
+        baseline_loss=baseline, whatif_results=sims,
+        weights=body.weights, costs=body.costs,
+    )
+    result["simulations"] = sims
+    return result

@@ -21,7 +21,7 @@ import {
   corrosionTelemetry,
   whatIfOptions,
 } from './data'
-import { checkHealth, fetchTelemetry, postDetect, postVerify, postWhatIf, fetchIncidents } from './api'
+import { checkHealth, fetchTelemetry, postDetect, postVerify, postWhatIf, postDecisionCompare, fetchIncidents } from './api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 function VerifyChart({ observed, simulated }) {
@@ -686,17 +686,101 @@ function WhatIfPage({ active, data, scenario = 'leak' }) {
   const [live, setLive] = useState(false)
   const [loading, setLoading] = useState(false)
   const [baselineLoss, setBaselineLoss] = useState(null)
+  const [detectInfo, setDetectInfo] = useState(null)
+  const [compareResult, setCompareResult] = useState(null)
+  const [compareLive, setCompareLive] = useState(false)
+  const [compareLoading, setCompareLoading] = useState(false)
   const chosen = whatIfOptions[option]
+
+  const severityForScenario = { leak: 'HIGH', burst: 'HIGH', demand: 'MEDIUM', sensor: 'LOW', corrosion: 'MEDIUM', normal: 'NORMAL' }
+  const segmentForScenario = { leak: 'B2 → B3', burst: 'B2 → B3', demand: 'N1 → Zone C', sensor: 'N1 → B2', corrosion: 'B2 → B3', normal: 'B2 → B3' }
+
+  // Offline fallback mirrors backend/app/decision.py defaults so the demo still ranks without API.
+  const localCompareFallback = (incidentKey, baseline) => {
+    const base = baseline ?? (incidentKey === 'burst' ? 7000 : incidentKey === 'leak' ? 3500 : 0)
+    const costs = {
+      isolate: { usd: 2500, cost: 65, disruption: 'High', dScore: 75 },
+      reducePressure: { usd: 800, cost: 35, disruption: 'Low', dScore: 25 },
+      bypassRoute: { usd: 1800, cost: 50, disruption: 'Medium', dScore: 40 },
+      doNothing: { usd: 0, cost: 0, disruption: 'None', dScore: 5 },
+    }
+    const names = { isolate: 'isolate', reducePressure: 'throttle', bypassRoute: 'reroute', doNothing: 'do_nothing' }
+    const labels = { isolate: 'Isolate', reducePressure: 'Throttle', bypassRoute: 'Reroute', doNothing: 'Do Nothing' }
+    const rows = Object.entries(whatIfOptions).map(([key, item]) => {
+      let afterLoss = item.after.loss
+      if (base <= 0) afterLoss = 0
+      else if (key === 'reducePressure') {
+        const factor = (100 - throttle) / 100
+        afterLoss = Math.round(base * (0.45 + factor * 0.55))
+      } else afterLoss = Math.round(item.after.loss * (base / 3500))
+      const beforeLoss = Math.round(base)
+      const waterRed = beforeLoss > 0 ? Math.max(0, Math.round(((beforeLoss - afterLoss) / beforeLoss) * 1000) / 10) : 0
+      const c = costs[key]
+      const pressureBonus = item.after.pressure >= 3.5 ? 10 : item.after.pressure < 3.1 ? -5 : 0
+      const riskRed = base > 0
+        ? Math.max(0, Math.min(100, Math.round((waterRed * 0.85 - c.dScore * 0.15 + pressureBonus) * 10) / 10))
+        : Math.max(0, Math.round((5 - c.dScore * 0.1) * 10) / 10)
+      const usersNorm = Math.min(100, (item.after.users / 560) * 100)
+      const service = Math.max(0, Math.min(100, Math.round((100 - (0.6 * c.dScore + 0.4 * usersNorm)) * 10) / 10))
+      const score = Math.round((0.3 * waterRed + 0.3 * riskRed + 0.2 * service + 0.1 * (100 - c.cost) + 0.1 * (100 - c.dScore)) * 10) / 10
+      return {
+        action: names[key], scenario: key, label: labels[key], score,
+        water_loss_reduction: waterRed, water_saved_per_hour: Math.max(0, beforeLoss - afterLoss),
+        risk_reduction: riskRed, affected_users: item.after.users,
+        service_disruption: c.disruption, disruption_score: c.dScore,
+        estimated_cost_usd: c.usd, network_impact: { loss_before: beforeLoss, loss_after: afterLoss, pressure_after: item.after.pressure },
+      }
+    })
+    rows.sort((a, b) => b.score - a.score)
+    rows.forEach((r, i) => { r.rank = i + 1 })
+    const best = rows[0]
+    return {
+      options: rows, recommended_action: best.action,
+      reason: `${best.label} offers the best overall trade-off across configured cost, simulated impact (${best.water_loss_reduction}% loss reduction) and risk metrics (score ${best.score}). Operator review required.`,
+      why: [
+        `Water-loss reduction ${best.water_loss_reduction}% (${best.water_saved_per_hour.toLocaleString()} L/hr saved).`,
+        `Risk reduction ${best.risk_reduction}% with disruption ${best.service_disruption} (${best.affected_users} users).`,
+        `Planning cost $${best.estimated_cost_usd.toLocaleString()} — configured estimate, not a quotation.`,
+      ],
+      cost_basis: 'Configured planning estimates for MVP comparison only.',
+      operatorNote: 'Decision support only — no intervention is executed automatically.',
+    }
+  }
+
+  const compareAll = async () => {
+    setCompareLoading(true)
+    try {
+      const res = await postDecisionCompare({
+        incident: scenario,
+        severity: detectInfo?.severity ?? severityForScenario[scenario] ?? 'HIGH',
+        segment: detectInfo?.location?.segment ?? segmentForScenario[scenario] ?? 'B2 → B3',
+        baselineLoss,
+        valveThrottle: throttle,
+      })
+      setCompareResult(res)
+      setCompareLive(true)
+    } catch {
+      setCompareResult(localCompareFallback(scenario, baselineLoss))
+      setCompareLive(false)
+    } finally {
+      setCompareLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
     if (!active || !data?.length) {
       setBaselineLoss(null)
+      setDetectInfo(null)
+      setCompareResult(null)
       return
     }
     postDetect(data)
       .then((res) => {
-        if (!cancelled) setBaselineLoss(res?.impact?.lossPerHour ?? null)
+        if (!cancelled) {
+          setBaselineLoss(res?.impact?.lossPerHour ?? null)
+          setDetectInfo(res)
+        }
       })
       .catch(() => {})
     return () => {
@@ -777,6 +861,7 @@ function WhatIfPage({ active, data, scenario = 'leak' }) {
                     setOption(key)
                     setRan(false)
                     setResult(null)
+                    setCompareResult(null)
                   }}
                   className={`w-full rounded-md border p-3 text-left text-sm transition-colors ${
                     option === key ? 'border-primary bg-accent' : 'hover:bg-accent/50'
@@ -800,6 +885,7 @@ function WhatIfPage({ active, data, scenario = 'leak' }) {
                     onChange={(e) => {
                       setThrottle(Number(e.target.value))
                       setRan(false)
+                      setCompareResult(null)
                     }}
                     className="mt-2 w-full accent-primary"
                   />
@@ -839,6 +925,98 @@ function WhatIfPage({ active, data, scenario = 'leak' }) {
             )}
           </Card>
         </div>
+        {/* Cost-aware decision comparison (PRD MVP extension) */}
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="text-sm font-medium">Cost-aware what-if analysis</CardTitle>
+              <CardDescription>
+                {compareResult
+                  ? (compareLive ? 'Live backend ranking — configured planning estimates.' : 'Cached mock ranking (API offline) — planning estimates.')
+                  : 'Compare Isolate / Throttle / Reroute / Do Nothing side-by-side.'}
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              {compareResult && (compareLive ? <Badge variant="secondary">Live API</Badge> : <Badge variant="outline">Mock fallback</Badge>)}
+              <Badge variant="outline">Advisory only</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button className="w-full sm:w-auto" onClick={compareAll} disabled={compareLoading}>
+              {compareLoading ? 'Comparing…' : compareResult ? 'Re-run comparison' : 'Compare all 4 options'}
+            </Button>
+            {compareResult && (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Metric</TableHead>
+                      {compareResult.options.map((o) => (
+                        <TableHead key={o.action} className={o.rank === 1 ? 'font-semibold text-foreground' : ''}>
+                          {o.rank === 1 ? `⭐ ${o.label}` : o.label} · {o.score}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="font-medium">Water-loss reduction</TableCell>
+                      {compareResult.options.map((o) => (
+                        <TableCell key={o.action}>{o.water_loss_reduction}%</TableCell>
+                      ))}
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Risk reduction</TableCell>
+                      {compareResult.options.map((o) => (
+                        <TableCell key={o.action}>{o.risk_reduction}%</TableCell>
+                      ))}
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Users affected</TableCell>
+                      {compareResult.options.map((o) => (
+                        <TableCell key={o.action}>{o.affected_users}</TableCell>
+                      ))}
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Disruption</TableCell>
+                      {compareResult.options.map((o) => (
+                        <TableCell key={o.action}>{o.service_disruption}</TableCell>
+                      ))}
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Est. cost (planning)</TableCell>
+                      {compareResult.options.map((o) => (
+                        <TableCell key={o.action}>${fmt(o.estimated_cost_usd)}</TableCell>
+                      ))}
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Pressure after</TableCell>
+                      {compareResult.options.map((o) => (
+                        <TableCell key={o.action}>{Number(o.network_impact?.pressure_after ?? 0).toFixed(1)} bar</TableCell>
+                      ))}
+                    </TableRow>
+                  </TableBody>
+                </Table>
+                <div className="rounded-md border border-primary/30 bg-accent/50 p-4">
+                  <p className="text-sm font-medium">
+                    ⭐ Recommended for review: {compareResult.options[0].label} ({compareResult.options[0].score})
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{compareResult.reason}</p>
+                  <ul className="mt-2 space-y-1">
+                    {(compareResult.why ?? []).map((w) => (
+                      <li key={w} className="flex gap-2 text-xs text-muted-foreground">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <span>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[11px] text-muted-foreground">{compareResult.cost_basis}</p>
+                  {compareResult.operatorNote && <p className="mt-1 text-[11px] text-muted-foreground">{compareResult.operatorNote}</p>}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </PageSection>
     </div>
   )

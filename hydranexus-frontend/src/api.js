@@ -119,3 +119,17 @@ export async function postWhatIf(scenario = 'isolate', valveThrottle = 50, incid
   })
   return j
 }
+
+export async function postDecisionCompare({ incident = 'leak', severity = 'HIGH', segment = 'B2 → B3', baselineLoss = null, valveThrottle = 50, weights = null, costs = null } = {}) {
+  const j = await fetchJson('/api/decision/compare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ incident, severity, segment, baselineLoss, valveThrottle, weights, costs }),
+  }, 10000)
+  return j
+}
+
+export async function fetchDecisionConfig() {
+  const j = await fetchJson('/api/decision/config')
+  return j
+}

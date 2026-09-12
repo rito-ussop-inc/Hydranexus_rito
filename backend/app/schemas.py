@@ -28,3 +28,13 @@ class WhatIfRequest(BaseModel):
     valveThrottle: Optional[float] = Field(default=50, description="0..100, only for reducePressure")
     incident: Optional[str] = Field(default="leak", description="leak|burst|demand|sensor|normal")
     baselineLoss: Optional[float] = Field(default=None, description="current estimated loss L/hr from /api/ai/detect")
+
+
+class DecisionCompareRequest(BaseModel):
+    incident: Optional[str] = Field(default="leak", description="leak|burst|demand|sensor|corrosion|normal")
+    severity: Optional[str] = Field(default="HIGH", description="HIGH|MEDIUM|LOW|NORMAL")
+    segment: Optional[str] = Field(default="B2 → B3")
+    baselineLoss: Optional[float] = Field(default=None, description="current estimated loss L/hr; inferred from incident type when omitted")
+    valveThrottle: Optional[float] = Field(default=50, description="0..100, only for throttle/reducePressure")
+    weights: Optional[dict] = Field(default=None, description="override trade-off weights {water,risk,service,cost,disruption}")
+    costs: Optional[dict] = Field(default=None, description="override planning costs per action, e.g. {throttle: {cost_usd: 900}}")
