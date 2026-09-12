@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm --prefix hydranexus-frontend install && npm --prefix hydranexus-frontend run build",
+  "outputDirectory": "hydranexus-frontend/dist",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

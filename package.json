@@ -1,0 +1,7 @@
+{
+  "name": "hydranexus",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix hydranexus-frontend run build"
+  }
+}
