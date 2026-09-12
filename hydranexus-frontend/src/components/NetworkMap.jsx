@@ -30,8 +30,9 @@ function MinimalNode({ data, selected }) {
 // incident flag from node data instead of a window global.
 const nodeTypes = { default: MinimalNode, input: MinimalNode }
 
-export default function NetworkMap({ incidentActive = false, compact = false, onSelectSegment }) {
+export default function NetworkMap({ incidentActive = false, compact = false, onSelectSegment, scenario = 'leak' }) {
   const [activeNode, setActiveNode] = useState(null)
+  const decay = scenario === 'corrosion'
 
   const nodes = networkNodes.map((n) => ({
     ...n,
@@ -43,14 +44,15 @@ export default function NetworkMap({ incidentActive = false, compact = false, on
 
   const edges = networkEdges.map((edge) => {
     const isIncidentEdge = incidentActive && edge.id === 'e4'
+    const stroke = isIncidentEdge ? (decay ? '#f97316' : 'hsl(var(--destructive))') : 'hsl(var(--border))'
     return {
       ...edge,
       animated: isIncidentEdge,
       style: {
-        stroke: isIncidentEdge ? 'hsl(var(--destructive))' : 'hsl(var(--border))',
+        stroke,
         strokeWidth: isIncidentEdge ? 2.5 : 1.5,
       },
-      label: isIncidentEdge ? 'suspected leak' : '',
+      label: isIncidentEdge ? (decay ? 'structural decay' : scenario === 'burst' ? 'confirmed burst' : 'suspected leak') : '',
       labelStyle: { fontSize: 10 },
     }
   })

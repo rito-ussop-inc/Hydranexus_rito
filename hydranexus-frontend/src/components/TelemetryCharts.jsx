@@ -48,11 +48,12 @@ function Chart({ title, unit, data, dataKey }) {
 
 export default function TelemetryCharts({ data }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       <Chart title="Flow rate" unit="L/hr" data={data} dataKey="flow" />
       <Chart title="Pressure" unit="bar" data={data} dataKey="pressure" />
       <Chart title="Consumption" unit="L/hr" data={data} dataKey="consumption" />
       <Chart title="Tank level" unit="m" data={data} dataKey="level" />
+      <Chart title="Structural integrity (eddy current)" unit="0–1 variance" data={data} dataKey="eddy_current_variance" />
     </div>
   )
 }

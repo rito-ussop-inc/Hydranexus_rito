@@ -18,6 +18,7 @@ import {
   burstTelemetry,
   demandTelemetry,
   sensorTelemetry,
+  corrosionTelemetry,
   whatIfOptions,
 } from './data'
 import { checkHealth, fetchTelemetry, postDetect, postVerify, postWhatIf, fetchIncidents } from './api'
@@ -155,7 +156,7 @@ function Overview({ active, data, scenario, setPage, trigger, onExport }) {
             </Button>
           </CardHeader>
           <CardContent>
-            <NetworkMap incidentActive={active} compact onSelectSegment={() => setPage('network')} />
+            <NetworkMap incidentActive={active} compact scenario={scenario} onSelectSegment={() => setPage('network')} />
           </CardContent>
         </Card>
 
@@ -248,7 +249,7 @@ function Overview({ active, data, scenario, setPage, trigger, onExport }) {
 
 /* -------------------------------- Network ------------------------------- */
 
-function NetworkPage({ active }) {
+function NetworkPage({ active, scenario = 'leak' }) {
   return (
     <div className="space-y-4">
       <PageSection
@@ -257,7 +258,7 @@ function NetworkPage({ active }) {
         description="Prototype network. Highlight follows the AI localization."
         action={active && <Badge variant="destructive">Suspected: B2 → B3</Badge>}
       >
-        <NetworkMap incidentActive={active} />
+        <NetworkMap incidentActive={active} scenario={scenario} />
       </PageSection>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -298,12 +299,13 @@ const SCENARIOS = [
   ['burst', 'Burst'],
   ['demand', 'Demand spike'],
   ['sensor', 'Sensor fault'],
+  ['corrosion', 'Corrosion / decay'],
 ]
 
 function MonitoringPage({ scenario, setScenario }) {
   const [search, setSearch] = useState('')
   const [live, setLive] = useState(null)
-  const mocks = { normal: normalTelemetry, leak: leakTelemetry, burst: burstTelemetry, demand: demandTelemetry, sensor: sensorTelemetry }
+  const mocks = { normal: normalTelemetry, leak: leakTelemetry, burst: burstTelemetry, demand: demandTelemetry, sensor: sensorTelemetry, corrosion: corrosionTelemetry }
 
   useEffect(() => {
     let cancelled = false
@@ -342,11 +344,12 @@ function MonitoringPage({ scenario, setScenario }) {
           </select>
         }
       >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
           <Stat label="Flow" value={`${fmt(last.flow)} L/hr`} hint="Expected ≈ 8,000" alert={last.flow > 9000} />
           <Stat label="Pressure" value={`${last.pressure.toFixed(1)} bar`} hint="Expected ≈ 4.0" alert={last.pressure < 3.6} />
           <Stat label="Consumption" value={`${fmt(last.consumption)} L/hr`} hint="Expected ≈ 3,000" alert={last.consumption > 3600} />
           <Stat label="Tank level" value={`${(last.level ?? 3.2).toFixed(2)} m`} hint="Expected ≈ 3.20" alert={(last.level ?? 3.2) < 2.8} />
+          <Stat label="Eddy variance" value={`${(last.eddy_current_variance ?? 0).toFixed(2)}`} hint="0 healthy · 1 crack" alert={(last.eddy_current_variance ?? 0) >= 0.5} />
         </div>
         <TelemetryCharts data={data} />
         <Card>
@@ -363,6 +366,7 @@ function MonitoringPage({ scenario, setScenario }) {
                   <TableHead>Pressure</TableHead>
                   <TableHead>Consumption</TableHead>
                   <TableHead>Level</TableHead>
+                  <TableHead>Eddy</TableHead>
                   <TableHead>Anomaly</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -372,7 +376,7 @@ function MonitoringPage({ scenario, setScenario }) {
                   .slice()
                   .reverse()
                   .map((row) => {
-                    const abnormal = row.flow > 9000 || row.pressure < 3.6 || row.consumption > 3600 || (row.level ?? 3.2) < 2.8
+                    const abnormal = row.flow > 9000 || row.pressure < 3.6 || row.consumption > 3600 || (row.level ?? 3.2) < 2.8 || (row.eddy_current_variance ?? 0) >= 0.5
                     return (
                       <TableRow key={row.time}>
                         <TableCell className="font-medium">{row.time}</TableCell>
@@ -380,6 +384,7 @@ function MonitoringPage({ scenario, setScenario }) {
                         <TableCell>{row.pressure.toFixed(1)}</TableCell>
                         <TableCell>{fmt(row.consumption)}</TableCell>
                         <TableCell>{(row.level ?? 3.2).toFixed(2)}</TableCell>
+                        <TableCell>{(row.eddy_current_variance ?? 0).toFixed(2)}</TableCell>
                         <TableCell>{row.anomalyScore?.toFixed(2)}</TableCell>
                         <TableCell>
                           {abnormal ? <Badge variant="destructive">Anomaly</Badge> : <Badge variant="secondary">Normal</Badge>}
@@ -439,6 +444,8 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, d
   const hypothesis = ai?.primaryHypothesis ?? fallback.title.replace('Probable ', '').replace('Possible ', '')
   const severity = ai?.severity ?? fallback.severity
   const anomalyScore = ai?.anomalyScore ?? null
+  const pipe = ai?.pipeCondition ?? null
+  const structuralAlert = active && severity === 'HIGH' && pipe?.state === 'Crack'
   return (
     <div className="space-y-4">
       <PageSection
@@ -461,7 +468,7 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, d
               {active ? (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{hypothesis}</span>
+                    <span className="text-sm font-medium">{structuralAlert ? `🚨 ${hypothesis} Detected` : hypothesis}</span>
                     <Badge variant={severity === 'HIGH' ? 'destructive' : 'outline'}>{severity}</Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -481,6 +488,12 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, d
                     <div className="flex justify-between">
                       <dt className="text-muted-foreground">ML anomaly score</dt>
                       <dd className="font-medium">{anomalyScore != null ? anomalyScore.toFixed(2) : '—'}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Pipe condition</dt>
+                      <dd className="font-medium">
+                        {pipe ? `${pipe.state} (eddy ${Number(pipe.eddy).toFixed(2)})` : '—'}
+                      </dd>
                     </div>
                     <div className="flex justify-between">
                       <dt className="text-muted-foreground">Confidence</dt>
@@ -619,6 +632,7 @@ function ImpactPage({ active, data, scenario }) {
   const zone = impact?.impact?.affectedZone ?? fallback.zone
   const users = impact?.impact?.affectedUsers ?? 560
   const severity = impact?.severity ?? fallback.severity
+  const pipe = impact?.pipeCondition ?? null
   return (
     <div className="space-y-4">
       <PageSection
@@ -645,9 +659,16 @@ function ImpactPage({ active, data, scenario }) {
           <CardContent className="text-sm leading-6 text-muted-foreground">
             {scenario === 'demand'
               ? 'Consumption-driven rise — no pipe loss. No isolation needed; monitor demand peak.'
-              : scenario === 'burst'
-                ? `Burst-scale loss at ${impact?.location?.segment ?? fallback.location}. Isolate to stop major loss, operator must approve.`
-                : `Loss continues while unresolved. Isolating ${impact?.location?.segment ?? fallback.location} reduces loss but affects ${zone} service. Final intervention stays with a qualified operator.`}
+              : scenario === 'corrosion'
+                ? 'Wall degradation without a breach — no water loss yet. Schedule inspection; isolation saves nothing.'
+                : scenario === 'sensor'
+                  ? 'Pressure transmitter disagreement with healthy wall — false alarm. Check the sensor, not the pipe.'
+                  : scenario === 'burst'
+                    ? `Burst-scale loss at ${impact?.location?.segment ?? fallback.location}. Isolate to stop major loss, operator must approve.`
+                    : `Loss continues while unresolved. Isolating ${impact?.location?.segment ?? fallback.location} reduces loss but affects ${zone} service. Final intervention stays with a qualified operator.`}
+            {pipe && (
+              <span className="mt-1 block text-xs">Pipe condition: {pipe.state} (eddy {Number(pipe.eddy).toFixed(2)}) — {pipe.detail}.</span>
+            )}
           </CardContent>
         </Card>
       </PageSection>
@@ -1030,7 +1051,9 @@ export default function App() {
             ? demandTelemetry
             : scenario === 'sensor'
               ? sensorTelemetry
-              : normalTelemetry,
+              : scenario === 'corrosion'
+                ? corrosionTelemetry
+                : normalTelemetry,
     [scenario]
   )
 
@@ -1049,11 +1072,13 @@ export default function App() {
   const doVerify = async () => {
     setVerified(true)
     try {
-      const hypothesisMap = { leak: 'leak', burst: 'burst', demand: 'demand', sensor: 'sensor' }
+      const hypothesisMap = { leak: 'leak', burst: 'burst', demand: 'demand', sensor: 'sensor', corrosion: 'corrosion' }
+      const segmentMap = { leak: 'B2 → B3', burst: 'B2 → B3', demand: 'N1 → Zone C', sensor: 'N1 → B2', corrosion: 'B2 → B3' }
       const hypothesis = hypothesisMap[scenario] ?? 'leak'
-      const res = await postVerify(data, hypothesis, 'B2 → B3')
+      const res = await postVerify(data, hypothesis, segmentMap[scenario] ?? 'B2 → B3')
       setVerifyResult(res)
-      setToast({ message: `Verification: ${res.matchScore}% (${res.evidenceStrength}).`, type: res.verified ? 'success' : 'info' })
+      const urgent = res.verified && res.matchScore >= 75 && (hypothesis === 'leak' || hypothesis === 'burst')
+      setToast({ message: `${urgent ? '🚨 ' : ''}Verification: ${res.matchScore}% (${res.evidenceStrength}).`, type: res.verified ? 'success' : 'info' })
     } catch {
       setVerifyResult(null)
       setToast({ message: 'Verified against the local mock model.', type: 'success' })
@@ -1080,7 +1105,7 @@ export default function App() {
   const meta = pageMeta[page]
   const render = () => {
     if (page === 'overview') return <Overview active={active} data={data} scenario={scenario} setPage={setPage} trigger={trigger} onExport={exportReport} />
-    if (page === 'network') return <NetworkPage active={active} />
+    if (page === 'network') return <NetworkPage active={active} scenario={scenario} />
     if (page === 'monitoring')
       return (
         <MonitoringPage

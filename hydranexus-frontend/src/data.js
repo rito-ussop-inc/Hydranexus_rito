@@ -5,42 +5,49 @@ export const zones = [
 ]
 
 export const normalTelemetry = [
-  { time: '08:00', flow: 7900, pressure: 4.1, consumption: 2920, level: 3.22, anomalyScore: 0.02 },
-  { time: '09:00', flow: 8050, pressure: 4.0, consumption: 3010, level: 3.21, anomalyScore: 0.01 },
-  { time: '10:00', flow: 8120, pressure: 4.0, consumption: 2980, level: 3.19, anomalyScore: 0.03 },
-  { time: '11:00', flow: 8200, pressure: 3.9, consumption: 3050, level: 3.2, anomalyScore: 0.02 },
-  { time: '12:00', flow: 8100, pressure: 4.0, consumption: 3000, level: 3.23, anomalyScore: 0.01 },
-  { time: '13:00', flow: 8150, pressure: 3.9, consumption: 3040, level: 3.18, anomalyScore: 0.04 },
-  { time: '14:00', flow: 8200, pressure: 3.9, consumption: 3060, level: 3.21, anomalyScore: 0.02 },
-  { time: '15:00', flow: 8180, pressure: 4.0, consumption: 3040, level: 3.2, anomalyScore: 0.02 },
+  { time: '08:00', flow: 7900, pressure: 4.1, consumption: 2920, level: 3.22, eddy_current_variance: 0.015, anomalyScore: 0.02 },
+  { time: '09:00', flow: 8050, pressure: 4.0, consumption: 3010, level: 3.21, eddy_current_variance: 0.02, anomalyScore: 0.01 },
+  { time: '10:00', flow: 8120, pressure: 4.0, consumption: 2980, level: 3.19, eddy_current_variance: 0.02, anomalyScore: 0.03 },
+  { time: '11:00', flow: 8200, pressure: 3.9, consumption: 3050, level: 3.2, eddy_current_variance: 0.006, anomalyScore: 0.02 },
+  { time: '12:00', flow: 8100, pressure: 4.0, consumption: 3000, level: 3.23, eddy_current_variance: 0.018, anomalyScore: 0.01 },
+  { time: '13:00', flow: 8150, pressure: 3.9, consumption: 3040, level: 3.18, eddy_current_variance: 0.02, anomalyScore: 0.04 },
+  { time: '14:00', flow: 8200, pressure: 3.9, consumption: 3060, level: 3.21, eddy_current_variance: 0.025, anomalyScore: 0.02 },
+  { time: '15:00', flow: 8180, pressure: 4.0, consumption: 3040, level: 3.2, eddy_current_variance: 0.018, anomalyScore: 0.02 },
 ]
 
 export const leakTelemetry = [
   ...normalTelemetry.slice(0, 5),
-  { time: '13:00', flow: 8150, pressure: 3.9, consumption: 3040, level: 3.15, anomalyScore: 0.04 },
-  { time: '14:00', flow: 11400, pressure: 3.2, consumption: 3060, level: 2.75, anomalyScore: 0.88 },
-  { time: '15:00', flow: 11500, pressure: 3.3, consumption: 3050, level: 2.65, anomalyScore: 0.94 },
+  { time: '13:00', flow: 8150, pressure: 3.9, consumption: 3040, level: 3.15, eddy_current_variance: 0.51, anomalyScore: 0.04 },
+  { time: '14:00', flow: 11400, pressure: 3.2, consumption: 3060, level: 2.75, eddy_current_variance: 0.68, anomalyScore: 0.88 },
+  { time: '15:00', flow: 11500, pressure: 3.3, consumption: 3050, level: 2.65, eddy_current_variance: 0.85, anomalyScore: 0.94 },
 ]
 
 export const burstTelemetry = [
   ...normalTelemetry.slice(0, 5),
-  { time: '13:00', flow: 14200, pressure: 2.7, consumption: 3040, level: 2.4, anomalyScore: 0.96 },
-  { time: '14:00', flow: 15000, pressure: 2.4, consumption: 3000, level: 2.1, anomalyScore: 0.99 },
-  { time: '15:00', flow: 15300, pressure: 2.3, consumption: 2980, level: 1.95, anomalyScore: 0.99 },
+  { time: '13:00', flow: 14200, pressure: 2.7, consumption: 3040, level: 2.4, eddy_current_variance: 0.74, anomalyScore: 0.96 },
+  { time: '14:00', flow: 15000, pressure: 2.4, consumption: 3000, level: 2.1, eddy_current_variance: 0.83, anomalyScore: 0.99 },
+  { time: '15:00', flow: 15300, pressure: 2.3, consumption: 2980, level: 1.95, eddy_current_variance: 0.92, anomalyScore: 0.99 },
 ]
 
 export const demandTelemetry = [
   ...normalTelemetry.slice(0, 5),
-  { time: '13:00', flow: 10400, pressure: 3.8, consumption: 4050, level: 2.8, anomalyScore: 0.42 },
-  { time: '14:00', flow: 10800, pressure: 3.7, consumption: 4280, level: 2.6, anomalyScore: 0.51 },
-  { time: '15:00', flow: 11100, pressure: 3.6, consumption: 4400, level: 2.45, anomalyScore: 0.58 },
+  { time: '13:00', flow: 10400, pressure: 3.8, consumption: 4050, level: 2.8, eddy_current_variance: 0.02, anomalyScore: 0.42 },
+  { time: '14:00', flow: 10800, pressure: 3.7, consumption: 4280, level: 2.6, eddy_current_variance: 0.025, anomalyScore: 0.51 },
+  { time: '15:00', flow: 11100, pressure: 3.6, consumption: 4400, level: 2.45, eddy_current_variance: 0.02, anomalyScore: 0.58 },
 ]
 
 export const sensorTelemetry = [
   ...normalTelemetry.slice(0, 5),
-  { time: '13:00', flow: 8200, pressure: 4.0, consumption: 3010, level: 3.2, anomalyScore: 0.05 },
-  { time: '14:00', flow: 12100, pressure: 3.9, consumption: 3030, level: 3.18, anomalyScore: 0.72 },
-  { time: '15:00', flow: 7900, pressure: 4.0, consumption: 3050, level: 3.21, anomalyScore: 0.08 },
+  { time: '13:00', flow: 8150, pressure: 3.2, consumption: 3040, level: 3.15, eddy_current_variance: 0.02, anomalyScore: 0.55 },
+  { time: '14:00', flow: 8200, pressure: 3.0, consumption: 3060, level: 3.12, eddy_current_variance: 0.025, anomalyScore: 0.72 },
+  { time: '15:00', flow: 8180, pressure: 3.1, consumption: 3050, level: 3.1, eddy_current_variance: 0.02, anomalyScore: 0.78 },
+]
+
+export const corrosionTelemetry = [
+  ...normalTelemetry.slice(0, 5),
+  { time: '13:00', flow: 8150, pressure: 3.9, consumption: 3040, level: 3.15, eddy_current_variance: 0.22, anomalyScore: 0.3 },
+  { time: '14:00', flow: 8200, pressure: 3.9, consumption: 3060, level: 3.12, eddy_current_variance: 0.33, anomalyScore: 0.45 },
+  { time: '15:00', flow: 8180, pressure: 4.0, consumption: 3040, level: 3.1, eddy_current_variance: 0.44, anomalyScore: 0.55 },
 ]
 
 export const incidents = [
