@@ -133,3 +133,25 @@ export async function fetchDecisionConfig() {
   const j = await fetchJson('/api/decision/config')
   return j
 }
+
+export async function fetchRealDataMetadata() {
+  const j = await fetchJson('/api/real-data/metadata', {}, 8000)
+  return j
+}
+
+export async function fetchRealDataLeakages() {
+  const j = await fetchJson('/api/real-data/leakages', {}, 8000)
+  return j
+}
+
+export async function fetchRealDataTelemetry({ start, end, points = 24, event_pipe } = {}) {
+  const params = new URLSearchParams()
+  if (start) params.append('start', start)
+  if (end) params.append('end', end)
+  if (points) params.append('points', String(points))
+  if (event_pipe) params.append('event_pipe', event_pipe)
+  const query = params.toString() ? `?${params.toString()}` : ''
+  const j = await fetchJson(`/api/real-data/telemetry${query}`, {}, 10000)
+  return j
+}
+

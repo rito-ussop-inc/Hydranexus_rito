@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar'
 import PageHeader from './components/PageHeader'
 import NetworkMap from './components/NetworkMap'
 import TelemetryCharts from './components/TelemetryCharts'
+import RealTelemetryCharts from './components/RealTelemetryCharts'
 import AmbientNetwork from './components/visual/AmbientNetwork'
 import PageTransition from './components/visual/PageTransition'
 import LandingExperience from './components/landing/LandingExperience'
@@ -24,7 +25,18 @@ import {
   corrosionTelemetry,
   whatIfOptions,
 } from './data'
-import { checkHealth, fetchTelemetry, postDetect, postVerify, postWhatIf, postDecisionCompare, fetchIncidents } from './api'
+import {
+  checkHealth,
+  fetchTelemetry,
+  postDetect,
+  postVerify,
+  postWhatIf,
+  postDecisionCompare,
+  fetchIncidents,
+  fetchRealDataMetadata,
+  fetchRealDataLeakages,
+  fetchRealDataTelemetry,
+} from './api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 function VerifyChart({ observed, simulated }) {
@@ -307,11 +319,22 @@ const SCENARIOS = [
 ]
 
 function MonitoringPage({ scenario, setScenario }) {
+  const [mode, setMode] = useState('demo') // 'demo' | 'real'
   const [search, setSearch] = useState('')
   const [live, setLive] = useState(null)
   const mocks = { normal: normalTelemetry, leak: leakTelemetry, burst: burstTelemetry, demand: demandTelemetry, sensor: sensorTelemetry, corrosion: corrosionTelemetry }
 
+  // Real Data Mode State
+  const [realMeta, setRealMeta] = useState(null)
+  const [realLeakEvents, setRealLeakEvents] = useState([])
+  const [selectedEventPipe, setSelectedEventPipe] = useState('p232')
+  const [realPoints, setRealPoints] = useState(24)
+  const [realResp, setRealResp] = useState(null)
+  const [loadingReal, setLoadingReal] = useState(false)
+
+  // Demo telemetry effect
   useEffect(() => {
+    if (mode !== 'demo') return
     let cancelled = false
     setLive(null)
     fetchTelemetry(scenario, 8)
@@ -322,85 +345,318 @@ function MonitoringPage({ scenario, setScenario }) {
     return () => {
       cancelled = true
     }
-  }, [scenario])
+  }, [scenario, mode])
 
-  const data = live || mocks[scenario]
-  const last = data.at(-1)
-  const filtered = search ? data.filter((d) => d.time.includes(search) || String(d.flow).includes(search)) : data
+  // Real data metadata & events
+  useEffect(() => {
+    if (mode === 'real' && !realMeta) {
+      fetchRealDataMetadata()
+        .then((m) => {
+          setRealMeta(m)
+          if (m?.leakage_events?.length) {
+            setRealLeakEvents(m.leakage_events)
+          }
+        })
+        .catch(() => {})
+    }
+  }, [mode, realMeta])
+
+  // Real telemetry fetching
+  useEffect(() => {
+    if (mode !== 'real') return
+    let cancelled = false
+    setLoadingReal(true)
+    fetchRealDataTelemetry({
+      event_pipe: selectedEventPipe || undefined,
+      points: realPoints,
+    })
+      .then((res) => {
+        if (!cancelled) {
+          setRealResp(res)
+          setLoadingReal(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoadingReal(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [mode, selectedEventPipe, realPoints])
+
+  const demoData = live || mocks[scenario]
+  const demoLast = demoData.at(-1)
+  const demoFiltered = search ? demoData.filter((d) => d.time.includes(search) || String(d.flow).includes(search)) : demoData
+
+  const realData = realResp?.telemetry || []
+  const realLast = realData.length ? realData.at(-1) : null
+  const realFiltered = search && realData.length
+    ? realData.filter((d) => d.time.includes(search) || String(d.flow).includes(search) || (d.active_leaks && d.active_leaks.some((l) => l.includes(search))))
+    : realData
 
   return (
     <div className="space-y-4">
-      <PageSection
-        eyebrow="Telemetry"
-        title="Monitoring"
-        description={live ? 'Live backend feed.' : 'Backend unreachable — showing cached mock.'}
-        action={
-          <select
-            value={scenario}
-            onChange={(e) => setScenario(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+      {/* Mode Switcher Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+        <div className="inline-flex rounded-lg border border-slate-800 bg-[#0c1626]/90 p-1 text-xs backdrop-blur-sm shadow-inner">
+          <button
+            type="button"
+            onClick={() => setMode('demo')}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition-all ${
+              mode === 'demo'
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
           >
-            {SCENARIOS.map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
-        }
-      >
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <Stat label="Flow" value={`${fmt(last.flow)} L/hr`} hint="Expected ≈ 8,000" alert={last.flow > 9000} />
-          <Stat label="Pressure" value={`${last.pressure.toFixed(1)} bar`} hint="Expected ≈ 4.0" alert={last.pressure < 3.6} />
-          <Stat label="Consumption" value={`${fmt(last.consumption)} L/hr`} hint="Expected ≈ 3,000" alert={last.consumption > 3600} />
-          <Stat label="Tank level" value={`${(last.level ?? 3.2).toFixed(2)} m`} hint="Expected ≈ 3.20" alert={(last.level ?? 3.2) < 2.8} />
-          <Stat label="Eddy variance" value={`${(last.eddy_current_variance ?? 0).toFixed(2)}`} hint="0 healthy · 1 crack" alert={(last.eddy_current_variance ?? 0) >= 0.5} />
+            <span className={`h-1.5 w-1.5 rounded-full ${mode === 'demo' ? 'bg-cyan-400' : 'bg-slate-500'}`} />
+            Demo Simulation
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('real')}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition-all ${
+              mode === 'real'
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${mode === 'real' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+            Real SCADA Dataset (BattLeDIM 2018)
+          </button>
         </div>
-        <TelemetryCharts data={data} />
-        <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium">Readings</CardTitle>
-            <Input placeholder="Filter by time…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[180px]" />
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Flow</TableHead>
-                  <TableHead>Pressure</TableHead>
-                  <TableHead>Consumption</TableHead>
-                  <TableHead>Level</TableHead>
-                  <TableHead>Eddy</TableHead>
-                  <TableHead>Anomaly</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered
-                  .slice()
-                  .reverse()
-                  .map((row) => {
-                    const abnormal = row.flow > 9000 || row.pressure < 3.6 || row.consumption > 3600 || (row.level ?? 3.2) < 2.8 || (row.eddy_current_variance ?? 0) >= 0.5
-                    return (
-                      <TableRow key={row.time}>
-                        <TableCell className="font-medium">{row.time}</TableCell>
-                        <TableCell>{fmt(row.flow)}</TableCell>
-                        <TableCell>{row.pressure.toFixed(1)}</TableCell>
-                        <TableCell>{fmt(row.consumption)}</TableCell>
-                        <TableCell>{(row.level ?? 3.2).toFixed(2)}</TableCell>
-                        <TableCell>{(row.eddy_current_variance ?? 0).toFixed(2)}</TableCell>
-                        <TableCell>{row.anomalyScore?.toFixed(2)}</TableCell>
-                        <TableCell>
-                          {abnormal ? <Badge variant="destructive">Anomaly</Badge> : <Badge variant="secondary">Normal</Badge>}
-                        </TableCell>
+
+        {mode === 'real' && (
+          <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+            <span className="rounded bg-emerald-950/60 px-2 py-0.5 border border-emerald-500/30 text-emerald-400 font-semibold">
+              105,120 Records (5-min intervals)
+            </span>
+            <span className="hidden sm:inline text-slate-600">•</span>
+            <span className="hidden sm:inline text-slate-400">3 Inflow Meters · 33 Pressure Sensors</span>
+          </div>
+        )}
+      </div>
+
+      {mode === 'demo' ? (
+        <PageSection
+          eyebrow="Telemetry"
+          title="Monitoring"
+          description={live ? 'Live backend feed.' : 'Backend unreachable — showing cached mock.'}
+          action={
+            <select
+              value={scenario}
+              onChange={(e) => setScenario(e.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              {SCENARIOS.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          }
+        >
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <Stat label="Flow" value={`${fmt(demoLast.flow)} L/hr`} hint="Expected ≈ 8,000" alert={demoLast.flow > 9000} />
+            <Stat label="Pressure" value={`${demoLast.pressure.toFixed(1)} bar`} hint="Expected ≈ 4.0" alert={demoLast.pressure < 3.6} />
+            <Stat label="Consumption" value={`${fmt(demoLast.consumption)} L/hr`} hint="Expected ≈ 3,000" alert={demoLast.consumption > 3600} />
+            <Stat label="Tank level" value={`${(demoLast.level ?? 3.2).toFixed(2)} m`} hint="Expected ≈ 3.20" alert={(demoLast.level ?? 3.2) < 2.8} />
+            <Stat label="Eddy variance" value={`${(demoLast.eddy_current_variance ?? 0).toFixed(2)}`} hint="0 healthy · 1 crack" alert={(demoLast.eddy_current_variance ?? 0) >= 0.5} />
+          </div>
+          <TelemetryCharts data={demoData} />
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-sm font-medium">Readings</CardTitle>
+              <Input placeholder="Filter by time…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[180px]" />
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Flow</TableHead>
+                    <TableHead>Pressure</TableHead>
+                    <TableHead>Consumption</TableHead>
+                    <TableHead>Level</TableHead>
+                    <TableHead>Eddy</TableHead>
+                    <TableHead>Anomaly</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {demoFiltered
+                    .slice()
+                    .reverse()
+                    .map((row) => {
+                      const abnormal = row.flow > 9000 || row.pressure < 3.6 || row.consumption > 3600 || (row.level ?? 3.2) < 2.8 || (row.eddy_current_variance ?? 0) >= 0.5
+                      return (
+                        <TableRow key={row.time}>
+                          <TableCell className="font-medium">{row.time}</TableCell>
+                          <TableCell>{fmt(row.flow)}</TableCell>
+                          <TableCell>{row.pressure.toFixed(1)}</TableCell>
+                          <TableCell>{fmt(row.consumption)}</TableCell>
+                          <TableCell>{(row.level ?? 3.2).toFixed(2)}</TableCell>
+                          <TableCell>{(row.eddy_current_variance ?? 0).toFixed(2)}</TableCell>
+                          <TableCell>{row.anomalyScore?.toFixed(2)}</TableCell>
+                          <TableCell>
+                            {abnormal ? <Badge variant="destructive">Anomaly</Badge> : <Badge variant="secondary">Normal</Badge>}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </PageSection>
+      ) : (
+        /* Real Data Mode View */
+        <PageSection
+          eyebrow="BattLeDIM 2018 SCADA"
+          title="Real Infrastructure Telemetry"
+          description={
+            realResp?.active_event
+              ? `Centred on Pipe ${realResp.active_event.pipe} leak episode (${realResp.active_event.start_time.slice(0, 10)} to ${realResp.active_event.end_time.slice(0, 10)} · peak rate ${realResp.active_event.max_rate} m³/h).`
+              : 'Continuous 5-minute SCADA measurements across L-Town distribution grid.'
+          }
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={selectedEventPipe}
+                onChange={(e) => setSelectedEventPipe(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-2 text-xs font-mono"
+              >
+                <option value="">Baseline (No Active Leaks)</option>
+                {realLeakEvents.map((ev) => (
+                  <option key={ev.pipe} value={ev.pipe}>
+                    Pipe {ev.pipe} ({ev.start_time.slice(0, 10)} · {ev.max_rate} m³/h · {ev.duration_hours}h)
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={realPoints}
+                onChange={(e) => setRealPoints(Number(e.target.value))}
+                className="h-9 rounded-md border border-input bg-background px-2 text-xs font-mono"
+              >
+                <option value={16}>16 pts</option>
+                <option value={24}>24 pts</option>
+                <option value={48}>48 pts</option>
+                <option value={96}>96 pts</option>
+              </select>
+            </div>
+          }
+        >
+          {realLast ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <Stat
+                  label="Total Inflow"
+                  value={`${realLast.flow.toFixed(1)} m³/h`}
+                  hint={`p227: ${(realLast.flows?.p227 ?? 0).toFixed(1)} · p235: ${(realLast.flows?.p235 ?? 0).toFixed(1)}`}
+                />
+                <Stat
+                  label="Pressure Head"
+                  value={`${realLast.pressure.toFixed(1)} m`}
+                  hint="33-Sensor Network Avg"
+                  alert={realLast.pressure < 25.0}
+                />
+                <Stat
+                  label="PUMP_1 Discharge"
+                  value={`${(realLast.pump_flow || realLast.flows?.PUMP_1 || 0).toFixed(1)} m³/h`}
+                  hint="L-Town Primary Station"
+                />
+                <Stat
+                  label="Ground-Truth Leak"
+                  value={`${(realLast.leak_rate ?? 0).toFixed(2)} m³/h`}
+                  hint={realLast.active_leaks?.length ? `Pipe ${realLast.active_leaks.join(', ')} active` : 'No physical leakage'}
+                  alert={(realLast.leak_rate ?? 0) > 0}
+                />
+                <Stat
+                  label="Active Incident"
+                  value={realLast.active_leaks?.length ? `Leak: ${realLast.active_leaks[0]}` : 'Grid Nominal'}
+                  hint={realResp?.downsampled ? 'Downsampled from full window' : 'Exact 5-min intervals'}
+                  alert={realLast.active_leaks?.length > 0}
+                />
+              </div>
+
+              <RealTelemetryCharts data={realData} />
+
+              <Card>
+                <CardHeader className="flex-row items-center justify-between space-y-0">
+                  <div>
+                    <CardTitle className="text-sm font-medium">Real SCADA Feed Readings</CardTitle>
+                    <CardDescription className="text-xs font-mono text-slate-400 mt-1">
+                      Showing {realData.length} records · {realResp?.start} to {realResp?.end}
+                    </CardDescription>
+                  </div>
+                  <Input
+                    placeholder="Filter by time, flow…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="max-w-[180px] text-xs font-mono"
+                  />
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Timestamp (UTC)</TableHead>
+                        <TableHead>Inflow (m³/h)</TableHead>
+                        <TableHead>Avg Head (m)</TableHead>
+                        <TableHead>p227 Flow</TableHead>
+                        <TableHead>p235 Flow</TableHead>
+                        <TableHead>PUMP_1</TableHead>
+                        <TableHead>Ground Truth Leak</TableHead>
+                        <TableHead>Pipe</TableHead>
+                        <TableHead>Status</TableHead>
                       </TableRow>
-                    )
-                  })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </PageSection>
+                    </TableHeader>
+                    <TableBody>
+                      {realFiltered
+                        .slice()
+                        .reverse()
+                        .map((row) => {
+                          const hasLeak = (row.leak_rate ?? 0) > 0 || (row.active_leaks && row.active_leaks.length > 0)
+                          return (
+                            <TableRow key={row.time}>
+                              <TableCell className="font-mono text-xs font-medium">{row.time}</TableCell>
+                              <TableCell className="font-mono text-xs">{row.flow.toFixed(1)}</TableCell>
+                              <TableCell className="font-mono text-xs">{row.pressure.toFixed(1)}</TableCell>
+                              <TableCell className="font-mono text-xs">{(row.flows?.p227 ?? 0).toFixed(1)}</TableCell>
+                              <TableCell className="font-mono text-xs">{(row.flows?.p235 ?? 0).toFixed(1)}</TableCell>
+                              <TableCell className="font-mono text-xs">{(row.pump_flow || row.flows?.PUMP_1 || 0).toFixed(1)}</TableCell>
+                              <TableCell className="font-mono text-xs font-semibold text-rose-400">
+                                {hasLeak ? `${(row.leak_rate ?? 0).toFixed(2)} m³/h` : '0.00'}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs">
+                                {row.active_leaks?.length ? (
+                                  <span className="font-semibold text-rose-400">{row.active_leaks.join(', ')}</span>
+                                ) : (
+                                  <span className="text-slate-500">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {hasLeak ? (
+                                  <Badge variant="destructive" className="text-[10px] uppercase tracking-wider">Leak Active</Badge>
+                                ) : (
+                                  <Badge variant="secondary" className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-950/40">Grid Nominal</Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <div className="p-8 text-center text-slate-400 font-mono text-sm border border-slate-800 rounded-lg bg-slate-900/40">
+              {loadingReal ? 'Loading real SCADA telemetry from backend...' : 'No telemetry data available for this range.'}
+            </div>
+          )}
+        </PageSection>
+      )}
     </div>
   )
 }

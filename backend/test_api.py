@@ -285,7 +285,65 @@ def test_xai_edge_cases():
     assert client.post("/api/ai/detect", json={"telemetry": broken}).status_code in (400, 422)
 
 
+def test_real_data_metadata():
+    r = client.get("/api/real-data/metadata")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["dataset"] == "BattLeDIM 2018 L-Town Benchmark"
+    assert j["total_records"] == 105120
+    assert "p227" in j["flow_sensors"]
+    assert "p235" in j["flow_sensors"]
+    assert "PUMP_1" in j["flow_sensors"]
+    assert len(j["pressure_sensors"]) == 33
+    assert j["leakage_events_count"] == 14
+    assert j["timestamp_start"].startswith("2018-01-01")
+    assert j["timestamp_end"].startswith("2018-12-31")
+
+
+def test_real_data_leakages():
+    r = client.get("/api/real-data/leakages")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["count"] == 14
+    assert len(j["events"]) == 14
+    pipes = [e["pipe"] for e in j["events"]]
+    assert "p31" in pipes
+    assert "p232" in pipes
+    # Verify duration and rate are positive
+    assert all(e["duration_hours"] > 0 and e["max_rate"] > 0 for e in j["events"])
+
+
+def test_real_data_telemetry_window():
+    r = client.get("/api/real-data/telemetry?points=16")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["mode"] == "real"
+    assert len(j["telemetry"]) == 16
+    first = j["telemetry"][0]
+    # Check timestamp preservation
+    assert "2018-" in first["time"]
+    assert first["flow"] > 0
+    assert first["pressure"] > 0
+    assert "flows" in first and "p227" in first["flows"]
+
+
+def test_real_data_event_focus():
+    r = client.get("/api/real-data/telemetry?event_pipe=p31&points=12")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["active_event"] is not None
+    assert j["active_event"]["pipe"] == "p31"
+    assert len(j["telemetry"]) == 12
+
+
 if __name__ == "__main__":
-    for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):
+    import time
+    tests = sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items())
+    print(f"Running {len(tests)} tests...", flush=True)
+    for name, fn in tests:
+        t_start = time.time()
+        print(f"RUN  {name}...", end="", flush=True)
         fn()
-        print(f"PASS {name}")
+        print(f" PASS ({time.time() - t_start:.2f}s)", flush=True)
+    print("ALL TESTS PASSED!", flush=True)
+

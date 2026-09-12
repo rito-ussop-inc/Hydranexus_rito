@@ -4,6 +4,7 @@ Pipeline: Detect → Investigate → Verify → Assess → Simulate → Decide
 Principle: software-first (simulated telemetry), human-in-the-loop (no autonomous control).
 """
 from __future__ import annotations
+from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -320,3 +321,44 @@ def decision_compare(body: DecisionCompareRequest):
     )
     result["simulations"] = sims
     return result
+
+
+# ---------------------------------------------------------------------------
+# Real Data Mode (BattLeDIM 2018 L-Town Benchmark)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/real-data/metadata")
+def real_data_metadata():
+    """Retrieve metadata, sensor inventories, and historical leakage summary for real SCADA dataset."""
+    try:
+        from real_data import get_metadata
+        return get_metadata().model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load real data metadata: {str(e)}")
+
+
+@app.get("/api/real-data/leakages")
+def real_data_leakages():
+    """Retrieve all 14 historical ground-truth leakage episodes from 2018_Leakages.csv."""
+    try:
+        from real_data import get_leakage_events
+        events = get_leakage_events()
+        return {"count": len(events), "events": [e.model_dump() for e in events]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load leakage events: {str(e)}")
+
+
+@app.get("/api/real-data/telemetry")
+def real_data_telemetry(
+    start: Optional[str] = Query(default=None, description="Start timestamp YYYY-MM-DD HH:MM:SS"),
+    end: Optional[str] = Query(default=None, description="End timestamp YYYY-MM-DD HH:MM:SS"),
+    points: int = Query(default=24, ge=4, le=200, description="Max points to return (downsampled if window is larger)"),
+    event_pipe: Optional[str] = Query(default=None, description="Pipe ID to center telemetry window on an active leak"),
+):
+    """Retrieve windowed and downsampled real telemetry from BattLeDIM 2018 SCADA feeds."""
+    try:
+        from real_data import get_real_telemetry
+        return get_real_telemetry(start=start, end=end, points=points, event_pipe=event_pipe).model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to slice real telemetry: {str(e)}")
+
