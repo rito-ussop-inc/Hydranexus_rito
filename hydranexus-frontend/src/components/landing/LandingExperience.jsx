@@ -15,14 +15,13 @@ import {
 } from 'lucide-react'
 
 const SCENES = [
-  { id: 1, name: 'Conduits', title: 'Infrastructure Emergence', duration: 1800 },
-  { id: 2, name: 'Identity', title: 'HydraNexus Intelligence', duration: 2000 },
-  { id: 3, name: 'Topology', title: 'Network Node Activation', duration: 2000 },
-  { id: 4, name: 'Telemetry', title: 'Real-time Telemetry Streams', duration: 2000 },
-  { id: 5, name: 'Anomaly', title: 'Hydraulic Anomaly Detected', duration: 2000 },
-  { id: 6, name: 'Diagnosis', title: 'AI Isolation Forest & Evidence', duration: 2200 },
-  { id: 7, name: 'Decide', title: 'Decision Intelligence Engine', duration: 2000 },
-  { id: 8, name: 'Console', title: 'Operational Console Handoff', duration: 1200 },
+  { id: 1, name: 'Identity', title: 'HydraNexus Intelligence', duration: 2000 },
+  { id: 2, name: 'Topology', title: 'Network Node Activation', duration: 2000 },
+  { id: 3, name: 'Telemetry', title: 'Real-time Telemetry Streams', duration: 2000 },
+  { id: 4, name: 'Anomaly', title: 'Hydraulic Anomaly Detected', duration: 2000 },
+  { id: 5, name: 'Diagnosis', title: 'AI Isolation Forest & Evidence', duration: 2200 },
+  { id: 6, name: 'Decide', title: 'Decision Intelligence Engine', duration: 2000 },
+  { id: 7, name: 'Console', title: 'Operational Console Handoff', duration: 1200 },
 ]
 
 export default function LandingExperience({ onComplete, scenario = 'leak' }) {
@@ -60,7 +59,7 @@ export default function LandingExperience({ onComplete, scenario = 'leak' }) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex flex-col justify-between bg-[#060b14] text-slate-100 transition-all duration-500 select-none ${
+      className={`fixed inset-0 z-50 flex flex-col justify-between bg-[#0a1424] text-slate-100 transition-all duration-500 select-none ${
         isExiting ? 'opacity-0 scale-105 pointer-events-none' : 'opacity-100 scale-100'
       }`}
     >
@@ -81,11 +80,11 @@ export default function LandingExperience({ onComplete, scenario = 'leak' }) {
           />
           <path
             d="M 350,450 L 550,600 L 850,600 L 1050,450"
-            stroke={sceneIndex >= 4 ? '#ef4444' : '#0284c7'}
-            strokeWidth={sceneIndex >= 4 ? '2.5' : '1.5'}
+            stroke={sceneIndex >= 3 ? '#ef4444' : '#0284c7'}
+            strokeWidth={sceneIndex >= 3 ? '2.5' : '1.5'}
             strokeDasharray="6 6"
             className="animate-flow-dash"
-            opacity={sceneIndex >= 4 ? '0.85' : '0.4'}
+            opacity={sceneIndex >= 3 ? '0.85' : '0.4'}
           />
         </svg>
       </div>
@@ -133,24 +132,8 @@ export default function LandingExperience({ onComplete, scenario = 'leak' }) {
       {/* Main Scene Content Container */}
       <main className="relative z-10 flex flex-1 items-center justify-center px-6 py-8">
         <div className="w-full max-w-4xl">
-          {/* Scene 1: Infrastructure Emergence */}
+          {/* Scene 1: Identity */}
           {sceneIndex === 0 && (
-            <div className="space-y-6 text-center animate-in fade-in zoom-in-95 duration-500">
-              <div className="inline-flex items-center gap-2 rounded-full border border-sky-900/60 bg-sky-950/40 px-3 py-1 font-mono text-xs text-sky-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
-                CONDUIT MESH ACTIVE · SAMPLING SCADA NODES
-              </div>
-              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-5xl">
-                Municipal Water Distribution
-              </h1>
-              <p className="mx-auto max-w-lg text-sm text-slate-400 sm:text-base">
-                Initializing hydraulic telemetry grid across pressurized sub-district zones.
-              </p>
-            </div>
-          )}
-
-          {/* Scene 2: Identity */}
-          {sceneIndex === 1 && (
             <div className="space-y-6 text-center animate-in fade-in zoom-in-95 duration-500">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-600/20 border border-sky-500/40 text-sky-400 shadow-lg shadow-sky-500/10">
                 <Droplets className="h-8 w-8 text-sky-400" />
@@ -169,8 +152,8 @@ export default function LandingExperience({ onComplete, scenario = 'leak' }) {
             </div>
           )}
 
-          {/* Scene 3: Network Activation */}
-          {sceneIndex === 2 && (
+          {/* Scene 2: Network Activation */}
+          {sceneIndex === 1 && (
             <div className="space-y-8 animate-in fade-in duration-500">
               <div className="text-center">
                 <span className="font-mono text-xs text-sky-400 uppercase tracking-widest">TOPOLOGY MAPPING</span>
@@ -206,8 +189,8 @@ export default function LandingExperience({ onComplete, scenario = 'leak' }) {
             </div>
           )}
 
-          {/* Scene 4: Telemetry Activation */}
-          {sceneIndex === 3 && (
+          {/* Scene 3: Telemetry Activation */}
+          {sceneIndex === 2 && (
             <div className="space-y-8 animate-in fade-in duration-500">
               <div className="text-center">
                 <span className="font-mono text-xs text-sky-400 uppercase tracking-widest">LIVE SCADA STREAMS</span>
@@ -238,8 +221,8 @@ export default function LandingExperience({ onComplete, scenario = 'leak' }) {
             </div>
           )}
 
-          {/* Scene 5: Hydraulic Anomaly */}
-          {sceneIndex === 4 && (
+          {/* Scene 4: Hydraulic Anomaly */}
+          {sceneIndex === 3 && (
             <div className="space-y-6 text-center animate-in zoom-in-95 duration-500">
               <div className="inline-flex items-center gap-2 rounded-full border border-red-900/80 bg-red-950/60 px-3 py-1 font-mono text-xs text-red-400 shadow-md shadow-red-950/40">
                 <AlertTriangle className="h-4 w-4 text-red-400 animate-pulse" />
@@ -265,8 +248,8 @@ export default function LandingExperience({ onComplete, scenario = 'leak' }) {
             </div>
           )}
 
-          {/* Scene 6: AI Diagnostic Investigation */}
-          {sceneIndex === 5 && (
+          {/* Scene 5: AI Diagnostic Investigation */}
+          {sceneIndex === 4 && (
             <div className="space-y-6 animate-in fade-in duration-500">
               <div className="text-center">
                 <span className="font-mono text-xs text-sky-400 uppercase tracking-widest">EXPLAINABLE AI DIAGNOSIS</span>
@@ -292,8 +275,8 @@ export default function LandingExperience({ onComplete, scenario = 'leak' }) {
             </div>
           )}
 
-          {/* Scene 7: Decision Intelligence Engine */}
-          {sceneIndex === 6 && (
+          {/* Scene 6: Decision Intelligence Engine */}
+          {sceneIndex === 5 && (
             <div className="space-y-6 text-center animate-in fade-in duration-500">
               <div className="inline-flex items-center gap-2 rounded-full border border-sky-900 bg-sky-950/60 px-3 py-1 font-mono text-xs text-sky-300">
                 <Sliders className="h-3.5 w-3.5 text-sky-400" />
@@ -316,8 +299,8 @@ export default function LandingExperience({ onComplete, scenario = 'leak' }) {
             </div>
           )}
 
-          {/* Scene 8: Console Handoff */}
-          {sceneIndex === 7 && (
+          {/* Scene 7: Console Handoff */}
+          {sceneIndex === 6 && (
             <div className="space-y-4 text-center animate-in zoom-in-95 duration-500">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-900/80 bg-emerald-950/40 px-3.5 py-1.5 font-mono text-xs text-emerald-400">
                 <CheckCircle className="h-4 w-4 text-emerald-400" />

@@ -32,7 +32,7 @@ export default function Sidebar({ page, setPage, mobileOpen, onClose, incidentAc
       )}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-60 transform flex-col border-r border-slate-800/80 bg-[#09111e]/95 backdrop-blur-md transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex w-60 transform flex-col border-r border-slate-800/80 bg-[#0c1626]/95 backdrop-blur-md transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >

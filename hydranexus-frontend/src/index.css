@@ -4,47 +4,47 @@
 
 @layer base {
   :root {
-    --background: 224 71% 4.5%;
+    --background: 220 46% 9%;
     --foreground: 210 40% 98%;
-    --card: 222 47% 7.5%;
+    --card: 220 42% 12.5%;
     --card-foreground: 210 40% 98%;
-    --popover: 222 47% 7.5%;
+    --popover: 220 42% 12.5%;
     --popover-foreground: 210 40% 98%;
     --primary: 199 89% 48%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 217 33% 13%;
+    --secondary: 218 36% 16%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 13%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 16%;
+    --muted: 218 36% 16%;
+    --muted-foreground: 215 20% 68%;
+    --accent: 218 36% 19%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 15%;
-    --input: 217 33% 15%;
+    --border: 218 32% 18%;
+    --input: 218 32% 18%;
     --ring: 199 89% 48%;
     --radius: 0.75rem;
   }
 
   .dark {
-    --background: 224 71% 4.5%;
+    --background: 220 46% 9%;
     --foreground: 210 40% 98%;
-    --card: 222 47% 7.5%;
+    --card: 220 42% 12.5%;
     --card-foreground: 210 40% 98%;
-    --popover: 222 47% 7.5%;
+    --popover: 220 42% 12.5%;
     --popover-foreground: 210 40% 98%;
     --primary: 199 89% 48%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 217 33% 13%;
+    --secondary: 218 36% 16%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 13%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 16%;
+    --muted: 218 36% 16%;
+    --muted-foreground: 215 20% 68%;
+    --accent: 218 36% 19%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 15%;
-    --input: 217 33% 15%;
+    --border: 218 32% 18%;
+    --input: 218 32% 18%;
     --ring: 199 89% 48%;
   }
 }
@@ -58,7 +58,7 @@
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
     font-feature-settings: 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
-    background-color: #060b14;
+    background-color: #0c1524;
     color: #f8fafc;
   }
   :focus-visible {

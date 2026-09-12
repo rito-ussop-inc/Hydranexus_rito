@@ -159,14 +159,14 @@ export const whatIfOptions = {
 }
 
 export const networkNodes = [
-  { id: 'reservoir', position: { x: 40, y: 180 }, data: { label: 'Reservoir', type: 'Source', capacity: '120,000 m³', pressure: '4.5 bar' }, type: 'input' },
-  { id: 'n1', position: { x: 260, y: 180 }, data: { label: 'N1 · Main Junction', type: 'Distribution', flow: '8,200 L/h', pressure: '4.2 bar' } },
-  { id: 'n2', position: { x: 500, y: 80 }, data: { label: 'N2 · Zone A', type: 'Sub-district', flow: '1,980 L/h', pressure: '4.1 bar' } },
-  { id: 'n3', position: { x: 500, y: 280 }, data: { label: 'N3 · B2 Junction', type: 'Arterial Feed', flow: '3,060 L/h', pressure: '3.9 bar' } },
-  { id: 'n4', position: { x: 760, y: 280 }, data: { label: 'N4 · B3 / Zone B', type: 'High Density', flow: '6,560 L/h', pressure: '3.3 bar' } },
-  { id: 'n5', position: { x: 760, y: 80 }, data: { label: 'N5 · Zone C', type: 'Residential', flow: '2,140 L/h', pressure: '3.9 bar' } },
-  { id: 't1', position: { x: 500, y: 420 }, data: { label: 'T1 · Tank Zone B', type: 'Storage Tank', level: '3.2 m', pressure: '—' } },
-  { id: 't2', position: { x: 980, y: 80 }, data: { label: 'T2 · Tank Zone C', type: 'Storage Tank', level: '3.2 m', pressure: '—' } },
+  { id: 'reservoir', position: { x: 60, y: 190 }, data: { label: 'Reservoir', type: 'Source', capacity: '120,000 m³', pressure: '4.5 bar' }, type: 'input' },
+  { id: 'n1', position: { x: 290, y: 190 }, data: { label: 'N1 · Main Junction', type: 'Distribution', flow: '8,200 L/h', pressure: '4.2 bar' } },
+  { id: 'n2', position: { x: 550, y: 60 }, data: { label: 'N2 · Zone A', type: 'Sub-district', flow: '1,980 L/h', pressure: '4.1 bar' } },
+  { id: 'n5', position: { x: 550, y: 190 }, data: { label: 'N5 · Zone C', type: 'Residential', flow: '2,140 L/h', pressure: '3.9 bar' } },
+  { id: 'n3', position: { x: 550, y: 320 }, data: { label: 'N3 · B2 Junction', type: 'Arterial Feed', flow: '3,060 L/h', pressure: '3.9 bar' } },
+  { id: 't2', position: { x: 800, y: 190 }, data: { label: 'T2 · Tank Zone C', type: 'Storage Tank', level: '3.2 m', pressure: '—' } },
+  { id: 'n4', position: { x: 800, y: 320 }, data: { label: 'N4 · B3 / Zone B', type: 'High Density', flow: '6,560 L/h', pressure: '3.3 bar' } },
+  { id: 't1', position: { x: 800, y: 440 }, data: { label: 'T1 · Tank Zone B', type: 'Storage Tank', level: '3.2 m', pressure: '—' } },
 ]
 
 export const networkEdges = [

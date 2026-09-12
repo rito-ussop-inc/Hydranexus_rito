@@ -19,9 +19,9 @@ function AmbientNetwork({ incidentActive = false, scenario = 'normal' }) {
       className="pointer-events-none fixed inset-0 z-0 overflow-hidden select-none"
       style={{
         background: `
-          radial-gradient(ellipse 1100px 600px at 15% 15%, rgba(2, 132, 199, 0.08) 0%, transparent 65%),
-          radial-gradient(ellipse 900px 500px at 85% 85%, rgba(14, 165, 233, 0.06) 0%, transparent 70%),
-          radial-gradient(circle 500px at 50% 50%, rgba(15, 23, 42, 0.5) 0%, transparent 100%)
+          radial-gradient(ellipse 1200px 700px at 20% 10%, rgba(14, 165, 233, 0.12) 0%, transparent 70%),
+          radial-gradient(ellipse 1000px 600px at 85% 85%, rgba(2, 132, 199, 0.10) 0%, transparent 70%),
+          radial-gradient(circle 800px at 50% 45%, rgba(14, 116, 144, 0.08) 0%, transparent 100%)
         `,
       }}
     >

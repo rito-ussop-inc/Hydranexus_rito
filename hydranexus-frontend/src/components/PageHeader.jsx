@@ -21,7 +21,7 @@ export default function PageHeader({
   ]
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-[#070d18]/90 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-[#0c1626]/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-2.5">
           <Button variant="ghost" size="icon" onClick={onMenu} className="lg:hidden text-slate-400 hover:text-white hover:bg-slate-800" aria-label="Open navigation">

@@ -120,7 +120,7 @@ export default function NetworkMap({ incidentActive = false, compact = false, on
   })
 
   return (
-    <div className={`relative ${compact ? 'h-[340px]' : 'h-[500px]'} overflow-hidden rounded-xl border border-slate-800 bg-[#08101d]/90 backdrop-blur-xs`}>
+    <div className={`relative ${compact ? 'h-[340px]' : 'h-[500px]'} overflow-hidden rounded-xl border border-slate-800/80 bg-[#091526]/90 backdrop-blur-xs shadow-inner`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -130,9 +130,10 @@ export default function NetworkMap({ incidentActive = false, compact = false, on
           onSelectSegment?.('B2 → B3')
         }}
         fitView
+        fitViewOptions={{ padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="#1e293b" gap={24} size={1} />
+        <Background color="#1e3250" gap={24} size={1} />
         <Controls showInteractive={false} className="!border-slate-800 !bg-slate-900 !rounded-lg overflow-hidden" />
       </ReactFlow>
 
