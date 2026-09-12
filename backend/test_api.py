@@ -36,6 +36,22 @@ def test_eddy_fusion_tracks():
     assert abs(corr[-1]["pressure"] - 4.0) < 0.3  # hydraulics normal
 
 
+def test_fusion_truth_table():
+    from app.ai import analyze
+    leak = analyze(generate_telemetry("leak"))
+    assert leak["primaryHypothesis"] == "Confirmed Leak"
+    assert leak["pipeCondition"]["state"] == "Crack"
+    burst = analyze(generate_telemetry("burst"))
+    assert burst["primaryHypothesis"] == "Confirmed Burst"
+    sensor = analyze(generate_telemetry("sensor"))
+    assert sensor["primaryHypothesis"] == "Sensor Fault"
+    assert sensor["pipeCondition"]["state"] == "Healthy"
+    assert sensor["impact"]["lossPerHour"] == 0.0
+    corr = analyze(generate_telemetry("corrosion"))
+    assert corr["primaryHypothesis"] == "Early Corrosion"
+    assert corr["impact"]["lossPerHour"] == 0.0
+
+
 def test_detect_leak():
     data = generate_telemetry("leak")
     r = client.post("/api/ai/detect", json={"telemetry": data})

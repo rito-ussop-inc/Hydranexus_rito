@@ -71,16 +71,16 @@ def generate_telemetry(scenario: str = "normal", points: int = 8, seed: int = 7)
         # No structural change: healthy wall.
     elif scenario == "corrosion" and k:
         # Early degradation: hydraulics stay normal, eddy creeps up gradually
-        # (corrosion without a breach — maintenance warning, not an emergency).
+        # (corrosion without a breach — stays below the 0.5 crack line).
         ramp = np.linspace(0.0, 1.0, k)
-        eddy[idx] = np.clip(0.15 + 0.40 * ramp + rng.normal(0, 0.02, k), 0.0, 1.0)
+        eddy[idx] = np.clip(0.12 + 0.30 * ramp + rng.normal(0, 0.02, k), 0.0, 1.0)
         level[idx] -= 0.10 * ramp
     elif scenario == "sensor" and k:
-        # Single-point spike, pressure + level + eddy stable (classic sensor fault signature)
-        spike_at = fault_start + (k // 2)
-        if spike_at < points:
-            flow[spike_at] += 3900
-            # pressure deliberately untouched; consumption untouched; level untouched; eddy untouched
+        # False alarm: abrupt sustained pressure drop with normal flow,
+        # stable consumption, stable level and healthy wall (eddy ~0.0).
+        # The pressure transmitter is lying — the pipe is intact.
+        pressure[idx] -= 0.90 + rng.normal(0, 0.03, k) * 0.2
+        level[idx] -= 0.05 * np.linspace(0.6, 1.0, k)
 
     flow = np.clip(flow, 1000, 18000)
     pressure = np.clip(pressure, 1.5, 5.0)
