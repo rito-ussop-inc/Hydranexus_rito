@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { CheckCircle2, AlertTriangle, Download, FileText, Play, X } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, Download, FileText, Play, X, Database } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import PageHeader from './components/PageHeader'
 import NetworkMap from './components/NetworkMap'
@@ -124,7 +124,7 @@ function Toast({ toast, onClose }) {
 
 /* ------------------------------- Overview ------------------------------- */
 
-function Overview({ active, data, scenario = 'leak', setPage, trigger, onExport }) {
+function Overview({ active, data, scenario = 'leak', setPage, trigger, onExport, onOpenRealData }) {
   const last = data?.at(-1)
   const profile = SCENARIO_PROFILES[scenario] || SCENARIO_PROFILES.leak
   const [ai, setAi] = useState(null)
@@ -158,6 +158,37 @@ function Overview({ active, data, scenario = 'leak', setPage, trigger, onExport 
         <Stat label="Flow" value={`${fmt(Math.round(flow))} L/hr`} hint="Baseline ≈ 8,000 L/hr" alert={flow > 9000} />
         <Stat label="Avg. pressure" value={`${Number(pressure).toFixed(1)} bar`} hint="Baseline ≈ 4.0 bar" alert={pressure < 3.6} />
         <Stat label="Est. loss" value={`${fmt(Math.round(loss))} L/hr`} hint={active ? `Potential ${hypothesis.toLowerCase()}` : 'No active loss'} alert={active && loss > 500} />
+      </div>
+
+      {/* Real SCADA Dataset Quick Access Banner */}
+      <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 via-[#0c1626]/90 to-[#0c1626] p-4 shadow-lg backdrop-blur-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400">
+              <Database className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-white tracking-wide">Real SCADA Dataset Mode</span>
+                <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-mono font-semibold text-emerald-300">
+                  BattLeDIM 2018 Benchmark
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-300">
+                Explore real historical SCADA telemetry across 2,176 km of physical water network, 442 sensors, and ground-truth leak events.
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              size="sm"
+              onClick={onOpenRealData}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs shadow-md shadow-emerald-900/40 cursor-pointer"
+            >
+              Open Real SCADA Mode →
+            </Button>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -318,8 +349,10 @@ const SCENARIOS = [
   ['corrosion', 'Corrosion / decay'],
 ]
 
-function MonitoringPage({ scenario, setScenario }) {
-  const [mode, setMode] = useState('demo') // 'demo' | 'real'
+function MonitoringPage({ scenario, setScenario, mode: propMode, setMode: propSetMode }) {
+  const [internalMode, setInternalMode] = useState(propMode || 'demo')
+  const mode = propMode !== undefined ? propMode : internalMode
+  const setMode = propSetMode || setInternalMode
   const [search, setSearch] = useState('')
   const [live, setLive] = useState(null)
   const mocks = { normal: normalTelemetry, leak: leakTelemetry, burst: burstTelemetry, demand: demandTelemetry, sensor: sensorTelemetry, corrosion: corrosionTelemetry }
@@ -1870,6 +1903,7 @@ function TermsPage() {
 
 export default function App() {
   const [page, setPage] = useState('overview')
+  const [dataSourceMode, setDataSourceMode] = useState('demo')
   const [active, setActive] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [scenario, setScenario] = useState('normal')
@@ -1877,6 +1911,13 @@ export default function App() {
   const [verifyResult, setVerifyResult] = useState(null)
   const [toast, setToast] = useState(null)
   const [backendOnline, setBackendOnline] = useState(false)
+
+  const handleDataSourceModeChange = (newMode) => {
+    setDataSourceMode(newMode)
+    if (page !== 'monitoring') {
+      setPage('monitoring')
+    }
+  }
 
   useEffect(() => {
     checkHealth()
@@ -2076,15 +2117,35 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
     setToast({ message: 'Report ready — choose Save as PDF in the print dialog.', type: 'success' })
   }
 
-  const meta = pageMeta[page]
+  const meta =
+    page === 'monitoring' && dataSourceMode === 'real'
+      ? ['Real SCADA Dataset', 'BattLeDIM 2018 benchmark · 2,176 km network · 442 sensors · Ground-truth leak events']
+      : pageMeta[page]
+
   const render = () => {
-    if (page === 'overview') return <Overview active={active} data={data} scenario={scenario} setPage={setPage} trigger={trigger} onExport={exportReport} />
+    if (page === 'overview')
+      return (
+        <Overview
+          active={active}
+          data={data}
+          scenario={scenario}
+          setPage={setPage}
+          trigger={trigger}
+          onExport={exportReport}
+          onOpenRealData={() => {
+            setDataSourceMode('real')
+            setPage('monitoring')
+          }}
+        />
+      )
     if (page === 'network') return <NetworkPage active={active} scenario={scenario} />
     if (page === 'monitoring')
       return (
         <MonitoringPage
           scenario={scenario}
           setScenario={handleScenarioChange}
+          mode={dataSourceMode}
+          setMode={setDataSourceMode}
         />
       )
     if (page === 'incident')
@@ -2128,6 +2189,8 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
           onClose={() => setMobileOpen(false)}
           incidentActive={active}
           onReplayBriefing={handleReplayBriefing}
+          dataSourceMode={dataSourceMode}
+          setDataSourceMode={setDataSourceMode}
         />
         <div className="min-w-0 flex-1">
           <PageHeader
@@ -2140,6 +2203,8 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
             scenario={scenario}
             onScenarioChange={handleScenarioChange}
             onReplayBriefing={handleReplayBriefing}
+            dataSourceMode={dataSourceMode}
+            onDataSourceModeChange={handleDataSourceModeChange}
           />
           <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
             <PageTransition pageKey={page}>

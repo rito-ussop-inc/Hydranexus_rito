@@ -10,6 +10,7 @@ import {
   Droplets,
   Play,
   X,
+  Database,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { Badge } from './ui/badge'
@@ -18,13 +19,23 @@ const items = [
   ['overview', LayoutDashboard, 'Overview'],
   ['network', Network, 'Network'],
   ['monitoring', Activity, 'Telemetry'],
+  ['real_scada', Database, 'Real SCADA Data'],
   ['incident', FileSearch, 'Investigation'],
   ['impact', Gauge, 'Impact'],
   ['whatif', FlaskConical, 'What-If'],
   ['history', History, 'History'],
 ]
 
-export default function Sidebar({ page, setPage, mobileOpen, onClose, incidentActive, onReplayBriefing }) {
+export default function Sidebar({
+  page,
+  setPage,
+  mobileOpen,
+  onClose,
+  incidentActive,
+  onReplayBriefing,
+  dataSourceMode = 'demo',
+  setDataSourceMode,
+}) {
   return (
     <>
       {mobileOpen && (
@@ -67,23 +78,58 @@ export default function Sidebar({ page, setPage, mobileOpen, onClose, incidentAc
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {items.map(([key, Icon, label]) => {
-            const isActive = page === key
+            const isRealScada = key === 'real_scada'
+            const isMonitoring = key === 'monitoring'
+            const isActive = isRealScada
+              ? page === 'monitoring' && dataSourceMode === 'real'
+              : isMonitoring
+              ? page === 'monitoring' && dataSourceMode === 'demo'
+              : page === key
+
             return (
               <button
                 key={key}
                 onClick={() => {
-                  setPage(key)
+                  if (isRealScada) {
+                    setDataSourceMode?.('real')
+                    setPage('monitoring')
+                  } else if (isMonitoring) {
+                    setDataSourceMode?.('demo')
+                    setPage('monitoring')
+                  } else {
+                    setPage(key)
+                  }
                   onClose()
                 }}
                 className={cn(
-                  'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-all',
+                  'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-all cursor-pointer',
                   isActive
-                    ? 'bg-sky-950/80 text-sky-400 border border-sky-800/80 font-semibold shadow-xs'
+                    ? isRealScada
+                      ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/80 font-semibold shadow-xs'
+                      : 'bg-sky-950/80 text-sky-400 border border-sky-800/80 font-semibold shadow-xs'
+                    : isRealScada
+                    ? 'text-emerald-400/80 hover:bg-emerald-950/30 hover:text-emerald-200'
                     : 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-200'
                 )}
               >
-                <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-sky-400' : 'text-slate-500')} />
+                <Icon
+                  className={cn(
+                    'h-4 w-4 shrink-0',
+                    isActive
+                      ? isRealScada
+                        ? 'text-emerald-400'
+                        : 'text-sky-400'
+                      : isRealScada
+                      ? 'text-emerald-500/70'
+                      : 'text-slate-500'
+                  )}
+                />
                 <span>{label}</span>
+                {isRealScada && (
+                  <span className="ml-auto rounded bg-emerald-500/20 border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-mono font-semibold text-emerald-300">
+                    2018
+                  </span>
+                )}
                 {key === 'incident' && incidentActive && (
                   <span className="ml-auto flex h-2 w-2 relative">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>

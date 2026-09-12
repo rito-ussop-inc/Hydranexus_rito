@@ -11,6 +11,8 @@ export default function PageHeader({
   scenario = 'normal',
   onScenarioChange,
   onReplayBriefing,
+  dataSourceMode = 'demo',
+  onDataSourceModeChange,
 }) {
   const scenarios = [
     ['normal', 'Normal baseline'],
@@ -35,11 +37,42 @@ export default function PageHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-2.5">
+          {/* Data Source Mode Switcher */}
+          {onDataSourceModeChange && (
+            <div className="inline-flex items-center rounded-lg border border-slate-700/80 bg-slate-900/90 p-0.5 text-xs font-mono shadow-inner">
+              <button
+                type="button"
+                onClick={() => onDataSourceModeChange('demo')}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all cursor-pointer ${
+                  dataSourceMode === 'demo'
+                    ? 'bg-sky-600 text-white font-semibold shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Synthetic simulation with scenario injection"
+              >
+                Demo Sim
+              </button>
+              <button
+                type="button"
+                onClick={() => onDataSourceModeChange('real')}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all cursor-pointer ${
+                  dataSourceMode === 'real'
+                    ? 'bg-emerald-600 text-white font-semibold shadow-xs'
+                    : 'text-emerald-400 hover:text-emerald-300'
+                }`}
+                title="BattLeDIM 2018 Real SCADA Dataset (105k records)"
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${dataSourceMode === 'real' ? 'bg-emerald-200 animate-pulse' : 'bg-emerald-400'}`} />
+                Real SCADA
+              </button>
+            </div>
+          )}
+
           {/* Briefing Replay Button */}
           {onReplayBriefing && (
             <button
               onClick={onReplayBriefing}
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-sky-800/70 bg-sky-950/40 px-2.5 py-1 text-xs font-mono text-sky-300 hover:bg-sky-900/60 hover:text-white transition-colors cursor-pointer"
+              className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-sky-800/70 bg-sky-950/40 px-2.5 py-1 text-xs font-mono text-sky-300 hover:bg-sky-900/60 hover:text-white transition-colors cursor-pointer"
               title="Replay cinematic system briefing"
             >
               <Sparkles className="h-3.5 w-3.5 text-sky-400" />
@@ -47,12 +80,12 @@ export default function PageHeader({
             </button>
           )}
 
-          {/* Scenario Selector */}
-          {onScenarioChange && (
+          {/* Scenario Selector or Real SCADA indicator */}
+          {dataSourceMode === 'demo' && onScenarioChange && (
             <select
               value={scenario}
               onChange={(e) => onScenarioChange(e.target.value)}
-              className="h-8 rounded-lg border border-slate-700 bg-slate-900 px-2.5 text-xs font-mono font-medium text-slate-200 shadow-xs transition-colors hover:border-slate-600 focus:outline-none focus:border-sky-500"
+              className="hidden sm:inline-block h-8 rounded-lg border border-slate-700 bg-slate-900 px-2.5 text-xs font-mono font-medium text-slate-200 shadow-xs transition-colors hover:border-slate-600 focus:outline-none focus:border-sky-500"
               aria-label="Simulation scenario"
             >
               {scenarios.map(([val, label]) => (
@@ -61,6 +94,12 @@ export default function PageHeader({
                 </option>
               ))}
             </select>
+          )}
+
+          {dataSourceMode === 'real' && (
+            <span className="hidden sm:inline-flex items-center gap-1 rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-2.5 py-1 text-xs font-mono font-semibold text-emerald-300">
+              BattLeDIM 2018
+            </span>
           )}
 
           {/* Live Backend Indicator */}
