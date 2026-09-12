@@ -153,6 +153,126 @@ def test_incidents_fallback():
     assert j.get("source") in ("mock", "supabase")
 
 
+def _explanation_for(scenario):
+    from app.ai import analyze
+    result = analyze(generate_telemetry(scenario))
+    expl = result["explanation"]
+    # Existing response keys are preserved alongside the new explanation.
+    assert result["primaryHypothesis"] == expl["diagnosis"]["primary"]
+    assert result["confidence"] == expl["confidence"] == expl["diagnosis"]["confidence"]
+    assert result["severity"] == expl["severity"]
+    assert result["evidence"] == expl["evidence"]
+    assert result["anomalyScore"] == expl["model"]["anomaly_score"]
+    assert expl["model"]["name"] == "Isolation Forest"
+    return result, expl
+
+
+def test_xai_leak_signals_dynamic():
+    from app.simulator import BASE_FLOW, BASE_PRESSURE
+    result, expl = _explanation_for("leak")
+    last = result["latest"]
+    flow_sig = next(s for s in expl["signals"] if s["feature"] == "flow")
+    press_sig = next(s for s in expl["signals"] if s["feature"] == "pressure")
+    # Values are computed from the actual telemetry point, not hardcoded.
+    assert flow_sig["value"] == round(last["flow"], 1)
+    assert flow_sig["baseline"] == BASE_FLOW
+    assert flow_sig["change_percent"] == round((last["flow"] - BASE_FLOW) / BASE_FLOW * 100, 1)
+    assert flow_sig["direction"] == "increase" and flow_sig["impact"] == "high"
+    assert press_sig["direction"] == "decrease" and press_sig["impact"] == "high"
+    assert press_sig["baseline"] == BASE_PRESSURE
+    assert "leak" in expl["summary"].lower() and expl["severity"] == "HIGH"
+    assert len(expl["diagnosis"]["alternatives"]) == 3
+
+
+def test_xai_all_scenarios():
+    expectations = {
+        "leak": "Confirmed Leak",
+        "burst": "Confirmed Burst",
+        "demand": "Demand Spike",
+        "sensor": "Sensor Fault",
+    }
+    for scenario, primary in expectations.items():
+        result, expl = _explanation_for(scenario)
+        assert expl["diagnosis"]["primary"] == primary, scenario
+        assert expl["summary"] and expl["model"]["interpretation"]
+        assert {s["feature"] for s in expl["signals"]} >= {"flow", "pressure", "consumption"}
+        for s in expl["signals"]:
+            assert set(s) == {"feature", "value", "baseline", "change_percent",
+                              "direction", "impact", "reason"}
+            assert s["direction"] in ("increase", "decrease", "stable")
+    # Normal telemetry: explanation stays consistent with the (unchanged) detection
+    # output and reports a calm severity — whatever the existing ranker decides.
+    result, normal_expl = _explanation_for("normal")
+    assert normal_expl["severity"] in ("NORMAL", "LOW")
+    assert normal_expl["diagnosis"]["primary"] == result["primaryHypothesis"]
+    # Unit-cover the Normal Operation summary branch of the builder directly.
+    from app.ai import build_explanation
+    calm = build_explanation(
+        {"flow": 8000.0, "pressure": 4.0, "consumption": 3000.0, "level": 3.2},
+        {"flow": 0.0, "pressure": 0.0, "consumption": 0.0, "level": 0.0},
+        0.05,
+        [{"cause": "Normal Operation", "score": 90.0},
+         {"cause": "Valve Issue", "score": 6.0}],
+        "NORMAL", ["Telemetry within expected range."])
+    assert calm["summary"].startswith("Normal operating condition")
+    assert calm["model"]["interpretation"] == "Within the normal operating range."
+    assert all(s["direction"] == "stable" for s in calm["signals"])
+
+
+def test_xai_detect_endpoint_carries_explanation():
+    data = generate_telemetry("burst")
+    r = client.post("/api/ai/detect", json={"telemetry": data})
+    expl = r.json()["explanation"]
+    assert expl["diagnosis"]["primary"] == "Confirmed Burst"
+    assert expl["signals"][0]["value"] == round(data[-1]["flow"], 1)
+
+
+def test_xai_edge_cases():
+    from app.ai import analyze
+    # Missing tank level: level signal omitted, never invented.
+    no_level = generate_telemetry("leak")
+    for p in no_level:
+        del p["level"]
+    expl = analyze(no_level)["explanation"]
+    assert all(s["feature"] != "level" for s in expl["signals"])
+    assert {s["feature"] for s in expl["signals"]} == {"flow", "pressure", "consumption"}
+    # Null eddy + extreme values must not crash.
+    extreme = generate_telemetry("normal")
+    extreme[-1]["eddy_current_variance"] = None
+    extreme[-1]["flow"] = 999999.0
+    assert analyze(extreme)["explanation"]["signals"][0]["value"] == 999999.0
+    # Missing / null / invalid required fields -> ValueError (API maps to 400).
+    bad_window = generate_telemetry("normal")
+    del bad_window[-1]["flow"]
+    try:
+        analyze(bad_window)
+        raise AssertionError("expected ValueError for missing flow")
+    except ValueError:
+        pass
+    bad_window = generate_telemetry("normal")
+    bad_window[-1]["pressure"] = None
+    try:
+        analyze(bad_window)
+        raise AssertionError("expected ValueError for null pressure")
+    except ValueError:
+        pass
+    bad_window = generate_telemetry("normal")
+    bad_window[-1]["consumption"] = "not-a-number"
+    try:
+        analyze(bad_window)
+        raise AssertionError("expected ValueError for invalid consumption")
+    except ValueError:
+        pass
+    # API surfaces malformed telemetry as a client error, not a 500.
+    # (Pydantic rejects non-numeric strings with 422 before analyze() runs;
+    #  analyze() itself raises ValueError -> 400 for missing/null numerics.)
+    r = client.post("/api/ai/detect", json={"telemetry": generate_telemetry("normal")})
+    assert r.status_code == 200 and "explanation" in r.json()
+    broken = generate_telemetry("normal")
+    broken[-1]["flow"] = "not-a-number"
+    assert client.post("/api/ai/detect", json={"telemetry": broken}).status_code in (400, 422)
+
+
 if __name__ == "__main__":
     for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):
         fn()

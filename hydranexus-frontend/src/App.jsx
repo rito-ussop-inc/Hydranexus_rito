@@ -401,9 +401,195 @@ function MonitoringPage({ scenario, setScenario }) {
   )
 }
 
+/* --------------------- AI Evidence & Diagnosis --------------------- */
+
+const XAI_BASELINES = { flow: 8000, pressure: 4.0, consumption: 3000, level: 3.2 }
+const XAI_UNITS = { flow: 'L/hr', pressure: 'bar', consumption: 'L/hr', level: 'm' }
+const XAI_LABELS = { flow: 'Flow', pressure: 'Pressure', consumption: 'Consumption', level: 'Tank Level' }
+
+function xaiInterpretation(score) {
+  if (score >= 0.9) return 'Highly abnormal operating condition.'
+  if (score >= 0.7) return 'Strongly abnormal operating condition.'
+  if (score >= 0.5) return 'Moderately abnormal operating condition.'
+  if (score >= 0.3) return 'Mildly unusual operating condition.'
+  return 'Within the normal operating range.'
+}
+
+// Offline fallback built only from the displayed feed + documented baselines.
+// Labeled as mock in the UI; never presented as a backend calculation.
+function mockExplanation(last, fb) {
+  const bands = { flow: [25, 12], pressure: [15, 8], consumption: [25, 12], level: [10, 5] }
+  const signals = ['flow', 'pressure', 'consumption', 'level']
+    .map((feature) => {
+      const raw = last?.[feature]
+      if (raw == null || !Number.isFinite(Number(raw))) return null
+      const base = XAI_BASELINES[feature]
+      const change = Math.round(((Number(raw) - base) / base) * 1000) / 10
+      const direction = change >= 2 ? 'increase' : change <= -2 ? 'decrease' : 'stable'
+      const mag = Math.abs(change)
+      const impact = mag >= bands[feature][0] ? 'high' : mag >= bands[feature][1] ? 'medium' : 'low'
+      const word = impact === 'high' ? 'significantly' : impact === 'medium' ? 'moderately' : 'slightly'
+      const reason =
+        direction === 'stable'
+          ? `${XAI_LABELS[feature]} remains close to the normal baseline.`
+          : `${XAI_LABELS[feature]} ${direction === 'increase' ? 'rose' : 'fell'} ${word} vs baseline.`
+      return { feature, value: Number(raw), baseline: base, change_percent: change, direction, impact, reason }
+    })
+    .filter(Boolean)
+  const primary = (fb.title ?? '').replace('Probable ', '').replace('Possible ', '')
+  const score = Number(last?.anomalyScore ?? 0)
+  return {
+    summary: fb.title ?? 'Incident',
+    confidence: fb.confidence ?? 0,
+    severity: fb.severity ?? 'Unknown',
+    signals,
+    evidence: fb.evidence ?? [],
+    model: { name: 'Isolation Forest', anomaly_score: score, interpretation: xaiInterpretation(score) },
+    diagnosis: {
+      primary,
+      confidence: fb.confidence ?? 0,
+      alternatives: (fb.causes ?? []).slice(1, 4).map(([cause, confidence]) => ({ cause, confidence })),
+    },
+  }
+}
+
+function SignalValue({ signal }) {
+  const v = signal.value
+  const text =
+    signal.feature === 'pressure' || signal.feature === 'level'
+      ? Number(v).toFixed(2)
+      : fmt(Math.round(Number(v) * 10) / 10)
+  return (
+    <span className="font-medium">
+      {text} <span className="font-normal text-muted-foreground">{XAI_UNITS[signal.feature]}</span>
+    </span>
+  )
+}
+
+function EvidenceDiagnosisCard({ active, ai, data, fallback, segment, live, setPage }) {
+  const [showReasoning, setShowReasoning] = useState(true)
+  const last = data?.at(-1)
+  const expl = ai?.explanation ?? (active && last ? mockExplanation(last, fallback) : null)
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <div>
+          <CardTitle className="text-sm font-medium">AI Evidence &amp; Diagnosis</CardTitle>
+          <CardDescription>
+            {!active
+              ? 'No anomaly selected'
+              : live
+                ? 'Backend explanation from live telemetry, anomaly score and ranked causes'
+                : 'Cached mock explanation (backend unreachable)'}
+          </CardDescription>
+        </div>
+        {active && (
+          <Button size="sm" variant="ghost" onClick={() => setShowReasoning((s) => !s)}>
+            {showReasoning ? 'Hide reasoning' : 'View reasoning'}
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!active || !expl ? (
+          <p className="text-sm text-muted-foreground">Select an anomaly to see why it was detected.</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{expl.diagnosis.primary}</span>
+                <Badge variant={expl.severity === 'HIGH' ? 'destructive' : 'outline'}>{expl.severity}</Badge>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{expl.confidence}%</span> confidence
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">{expl.summary}</p>
+            {showReasoning && (
+              <>
+                <Separator />
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Why this was detected</p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Signal</TableHead>
+                        <TableHead>Reading</TableHead>
+                        <TableHead>Baseline</TableHead>
+                        <TableHead>Change</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {expl.signals.map((s) => (
+                        <TableRow key={s.feature}>
+                          <TableCell>
+                            <div className="font-medium">{XAI_LABELS[s.feature] ?? s.feature}</div>
+                            <div className="text-xs text-muted-foreground">{s.reason}</div>
+                          </TableCell>
+                          <TableCell><SignalValue signal={s} /></TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {s.feature === 'pressure' || s.feature === 'level'
+                              ? `${Number(s.baseline).toFixed(1)} ${XAI_UNITS[s.feature]}`
+                              : `${fmt(s.baseline)} ${XAI_UNITS[s.feature]}`}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {s.change_percent >= 0 ? '+' : ''}{s.change_percent}%
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Model signal</p>
+                  <p className="mt-1 text-sm">
+                    {expl.model.name} · Anomaly score{' '}
+                    <span className="font-medium">{Number(expl.model.anomaly_score).toFixed(2)}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">{expl.model.interpretation}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Domain evidence is derived from baseline deviations and the ranked hydraulic rules, not from model internals.
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Alternative diagnoses</p>
+                  <div className="mt-2 space-y-2">
+                    {expl.diagnosis.alternatives.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No alternatives ranked.</p>
+                    )}
+                    {expl.diagnosis.alternatives.map((a) => (
+                      <div key={a.cause}>
+                        <div className="flex items-center justify-between text-sm">
+                          <span>{a.cause}</span>
+                          <span className="font-medium">{a.confidence}%</span>
+                        </div>
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
+                          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${a.confidence}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Affected segment: <span className="font-medium text-foreground">{segment}</span> · Confidence is a system estimate, not a guaranteed probability.
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => setPage('whatif')}>
+                    Open in What-If
+                  </Button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 /* ------------------------------ Investigation ---------------------------- */
 
-function InvestigationPage({ active, verify, verified, verifyResult, onExport, onExportPDF, data, scenario }) {
+function InvestigationPage({ active, verify, verified, verifyResult, onExport, onExportPDF, data, scenario, setPage }) {
   const fallback = incidents[0]
   const [ai, setAi] = useState(null)
   const [live, setLive] = useState(false)
@@ -527,6 +713,16 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, o
             </CardContent>
           </Card>
         </div>
+
+        <EvidenceDiagnosisCard
+          active={active}
+          ai={ai}
+          data={data}
+          fallback={fallback}
+          segment={segment}
+          live={live}
+          setPage={setPage}
+        />
 
         <Card>
           <CardHeader>
@@ -1393,7 +1589,7 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
           }}
         />
       )
-    if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} verifyResult={verifyResult} onExport={exportReport} onExportPDF={exportPDF} data={data} scenario={scenario} />
+    if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} verifyResult={verifyResult} onExport={exportReport} onExportPDF={exportPDF} data={data} scenario={scenario} setPage={setPage} />
     if (page === 'impact') return <ImpactPage active={active} data={data} scenario={scenario} />
     if (page === 'whatif') return <WhatIfPage active={active} data={data} scenario={scenario} />
     if (page === 'history') return <HistoryPage setPage={setPage} />

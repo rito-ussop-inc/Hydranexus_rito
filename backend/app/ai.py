@@ -16,12 +16,13 @@ Human-in-the-loop: every result carries confidence + evidence + operator note.
 No autonomous control is ever issued.
 """
 from __future__ import annotations
+import math
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 
 from .simulator import (
-    BASE_FLOW, BASE_PRESSURE, BASE_CONSUMPTION, BASE_EDDY,
+    BASE_FLOW, BASE_PRESSURE, BASE_CONSUMPTION, BASE_LEVEL, BASE_EDDY,
     generate_telemetry, deviation_pct, estimate_loss,
 )
 from .topology import localize
@@ -236,12 +237,174 @@ def build_evidence(latest: dict, dev: dict, causes: list[dict], location: dict,
     return ev
 
 
+def _safe_float(value, name: str) -> float:
+    """Required telemetry fields must be present and numeric.
+
+    Raises ValueError (mapped to HTTP 400 by the API) instead of leaking
+    TypeError on missing/null/invalid sensor values.
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"telemetry point has missing or invalid '{name}'")
+    if not math.isfinite(v):
+        raise ValueError(f"telemetry point has non-finite '{name}'")
+    return v
+
+
+# Explainability signal metadata. Baselines reuse the established simulator
+# constants; impact bands encode the existing domain intuition (pressure moves
+# on a smaller scale than flow, so its bands are tighter).
+SIGNAL_DEFS = (
+    {"feature": "flow", "label": "Flow", "unit": "L/hr", "decimals": 1,
+     "baseline": BASE_FLOW, "high": 25.0, "medium": 12.0},
+    {"feature": "pressure", "label": "Pressure", "unit": "bar", "decimals": 2,
+     "baseline": BASE_PRESSURE, "high": 15.0, "medium": 8.0},
+    {"feature": "consumption", "label": "Consumption", "unit": "L/hr", "decimals": 1,
+     "baseline": BASE_CONSUMPTION, "high": 25.0, "medium": 12.0},
+    {"feature": "level", "label": "Tank Level", "unit": "m", "decimals": 2,
+     "baseline": BASE_LEVEL, "high": 10.0, "medium": 5.0},
+)
+
+# Deadband: deviations smaller than this are reported as stable (avoids
+# flicker from simulator noise around the baseline).
+STABLE_BAND_PCT = 2.0
+
+PRIMARY_NOUNS = {
+    "Confirmed Leak": "pipeline leak",
+    "Pipeline Leak": "pipeline leak",
+    "Confirmed Burst": "pipe burst",
+    "Pipe Burst": "pipe burst",
+    "Demand Spike": "demand spike",
+    "Sensor Fault": "sensor fault",
+    "Early Corrosion": "early pipe corrosion",
+    "Valve Issue": "valve issue",
+    "Normal Operation": "normal operation",
+}
+
+
+def _signal_reason(feature: str, direction: str, word: str) -> str:
+    if direction == "stable":
+        stable = {
+            "flow": "Flow remains close to the normal baseline.",
+            "pressure": "Pressure remains close to the normal operating level.",
+            "consumption": "Consumer demand remains close to the normal baseline.",
+            "level": "Storage tank level held near baseline.",
+        }
+        return stable[feature]
+    if feature == "flow":
+        return (f"Flow is {word} above the normal baseline."
+                if direction == "increase" else f"Flow is {word} below the normal baseline.")
+    if feature == "pressure":
+        return (f"Pressure rose {word} above the normal operating level."
+                if direction == "increase" else f"Pressure dropped {word} below the normal operating level.")
+    if feature == "consumption":
+        return (f"Consumer demand is {word} above the normal baseline."
+                if direction == "increase" else f"Consumer demand is {word} below the normal baseline.")
+    # level
+    return (f"Storage tank level rose {word} above baseline."
+            if direction == "increase"
+            else f"Storage tank level fell {word} below baseline, indicating upstream loss or draw.")
+
+
+def model_interpretation(score: float) -> str:
+    if score >= 0.9:
+        return "Highly abnormal operating condition."
+    if score >= 0.7:
+        return "Strongly abnormal operating condition."
+    if score >= 0.5:
+        return "Moderately abnormal operating condition."
+    if score >= 0.3:
+        return "Mildly unusual operating condition."
+    return "Within the normal operating range."
+
+
+def build_explanation(latest: dict, dev: dict, score: float,
+                      causes: list[dict], severity: str,
+                      evidence: list[str]) -> dict:
+    """Explainable-AI layer over the existing detection + diagnosis output.
+
+    Everything is derived from the actual telemetry point, the real
+    IsolationForest anomaly score, and the existing ranked causes — no
+    invented values. Model signal (score) and domain evidence (deviations +
+    rules) are kept distinct so the explanation stays technically honest:
+    IsolationForest does not provide per-feature importance.
+    """
+    primary = causes[0]["cause"] if causes else "Unknown"
+    confidence = round(float(causes[0]["score"]) if causes else 0.0, 1)
+    if primary == "Normal Operation":
+        summary = "Normal operating condition — no significant anomaly"
+    elif primary == "Unknown":
+        summary = "Inconclusive pattern — insufficient evidence for a diagnosis"
+    else:
+        noun = PRIMARY_NOUNS.get(primary, primary.lower())
+        if confidence >= 80:
+            summary = f"High probability of {noun}"
+        elif confidence >= 60:
+            summary = f"Probable {noun}"
+        elif confidence >= 40:
+            summary = f"Possible {noun}"
+        else:
+            summary = f"Weak indication of {noun}"
+    signals = []
+    for spec in SIGNAL_DEFS:
+        f = spec["feature"]
+        value = latest.get(f)
+        if value is None:
+            continue  # e.g. missing tank-level reading: omit, don't invent
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(v):
+            continue
+        change = dev.get(f, 0.0)
+        direction = "increase" if change >= STABLE_BAND_PCT else (
+            "decrease" if change <= -STABLE_BAND_PCT else "stable")
+        magnitude = abs(change)
+        impact = "high" if magnitude >= spec["high"] else (
+            "medium" if magnitude >= spec["medium"] else "low")
+        word = "significantly" if impact == "high" else (
+            "moderately" if impact == "medium" else "slightly")
+        signals.append({
+            "feature": f,
+            "value": round(v, spec["decimals"]),
+            "baseline": spec["baseline"],
+            "change_percent": round(float(change), 1),
+            "direction": direction,
+            "impact": "medium" if direction == "stable" and f == "consumption" else impact,
+            "reason": _signal_reason(f, direction, word),
+        })
+    return {
+        "summary": summary,
+        "confidence": confidence,
+        "severity": severity,
+        "signals": signals,
+        "evidence": list(evidence),
+        "model": {
+            "name": "Isolation Forest",
+            "anomaly_score": score,
+            "interpretation": model_interpretation(score),
+        },
+        "diagnosis": {
+            "primary": primary,
+            "confidence": confidence,
+            "alternatives": [
+                {"cause": c["cause"], "confidence": round(float(c["score"]), 1)}
+                for c in causes[1:4]
+            ],
+        },
+    }
+
+
 def analyze(telemetry: list[dict]) -> dict:
     """Full Detect → Investigate → Assess pipeline for a telemetry window."""
     if not telemetry:
         raise ValueError("telemetry window is empty")
     latest = telemetry[-1]
-    flow, pressure, consumption = float(latest["flow"]), float(latest["pressure"]), float(latest["consumption"])
+    flow, pressure, consumption = (_safe_float(latest.get("flow"), "flow"),
+                                  _safe_float(latest.get("pressure"), "pressure"),
+                                  _safe_float(latest.get("consumption"), "consumption"))
     eddy_last = float(latest.get("eddy_current_variance") or 0.0)
     eddy_first = float(telemetry[0].get("eddy_current_variance") or 0.0)
     eddy_rise = eddy_last - eddy_first
@@ -294,5 +457,6 @@ def analyze(telemetry: list[dict]) -> dict:
             "severity": severity,
         },
         "evidence": evidence,
+        "explanation": build_explanation(latest, dev, score, causes, severity, evidence),
         "operatorNote": operator_note,
     }
