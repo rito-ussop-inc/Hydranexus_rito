@@ -90,9 +90,10 @@ def ai_detect(body: DetectRequest):
         result = analyze([p.model_dump() for p in body.telemetry])
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    # Auto-file HIGH/MEDIUM anomalies to Supabase (fire-and-forget, never breaks demo).
+    # Auto-file HIGH/MEDIUM anomalies + corrosion watch to Supabase
+    # (fire-and-forget, never breaks demo).
     try:
-        if result.get("severity") in ("HIGH", "MEDIUM"):
+        if result.get("severity") in ("HIGH", "MEDIUM") or result.get("primaryHypothesis") == "Early Corrosion":
             import datetime
             loc = result.get("location", {})
             hyp = result.get("primaryHypothesis", "Leak")

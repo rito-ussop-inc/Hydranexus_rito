@@ -5,16 +5,17 @@ import { networkEdges, networkNodes } from '../data'
 
 function MinimalNode({ data, selected }) {
   const alert = data.alert
+  const decay = data.decay
   return (
     <div
       className={`min-w-[140px] rounded-md border bg-background px-3 py-2 shadow-sm ${
-        alert ? 'border-destructive' : selected ? 'border-primary' : ''
+        alert ? (decay ? 'border-orange-500' : 'border-destructive') : selected ? 'border-primary' : ''
       }`}
     >
       <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-muted-foreground" />
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium">{data.label}</span>
-        <span className={`h-1.5 w-1.5 rounded-full ${alert ? 'bg-destructive' : 'bg-emerald-500'}`} />
+        <span className={`h-1.5 w-1.5 rounded-full ${alert ? (decay ? 'bg-orange-500' : 'bg-destructive') : 'bg-emerald-500'}`} />
       </div>
       <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
         <span>{data.type || 'Junction'}</span>
@@ -39,6 +40,7 @@ export default function NetworkMap({ incidentActive = false, compact = false, on
     data: {
       ...n.data,
       alert: incidentActive && (n.data.label.includes('B2') || n.data.label.includes('B3') || n.data.label.includes('Tank')),
+      decay: incidentActive && decay,
     },
   }))
 
