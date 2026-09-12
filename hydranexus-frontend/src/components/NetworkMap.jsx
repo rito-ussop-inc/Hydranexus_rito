@@ -49,22 +49,24 @@ function MinimalNode({ data, selected }) {
 
   return (
     <div
-      className={`min-w-[170px] rounded-xl border p-2.5 shadow-md transition-all ${
+      className={`w-[210px] rounded-xl border p-3 shadow-lg transition-all duration-200 select-none ${
         alert
           ? decay
-            ? 'border-orange-500 bg-orange-950/50 ring-2 ring-orange-400/40'
-            : 'border-red-500 bg-red-950/50 ring-2 ring-red-400/40'
+            ? 'border-orange-500 bg-orange-950/80 ring-2 ring-orange-500/40 text-slate-100'
+            : 'border-red-500 bg-red-950/80 ring-2 ring-red-500/40 text-slate-100'
           : selected
-          ? 'border-sky-400 bg-slate-900 ring-2 ring-sky-500/30'
-          : 'border-slate-800 bg-[#0c1626]/95 hover:border-sky-600/70'
+          ? 'border-cyan-400 bg-[#12223a] ring-2 ring-cyan-500/40 text-slate-100'
+          : 'border-slate-800 bg-[#0d1b2e] hover:border-cyan-500/60 text-slate-100'
       }`}
     >
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-sky-400" />
+      <Handle type="target" position={Position.Left} className="!h-3 !w-3 !rounded-full !border-2 !border-[#091526] !bg-cyan-400 shadow-sm" />
       <div className="flex items-start gap-2.5">
         {getNodeIcon(data.label, data.type)}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-1.5">
-            <span className="truncate text-xs font-bold text-slate-100">{data.label}</span>
+          <div className="flex items-center justify-between gap-1">
+            <span className="truncate text-xs font-semibold text-slate-100 tracking-tight" title={data.label}>
+              {data.label}
+            </span>
             <span
               className={`h-2 w-2 shrink-0 rounded-full ${
                 alert
@@ -75,19 +77,19 @@ function MinimalNode({ data, selected }) {
               }`}
             />
           </div>
-          <div className="text-[10px] font-mono text-slate-400">{data.type || 'Junction'}</div>
-          <div className="mt-1 flex items-center justify-between text-[10px] font-mono text-sky-400">
-            <span>{data.flow || (data.capacity ? data.capacity : '—')}</span>
+          <div className="text-[10px] font-mono text-slate-400 tracking-wide uppercase mt-0.5">{data.type || 'Junction'}</div>
+          <div className="mt-1.5 flex items-center justify-between border-t border-slate-800/80 pt-1 text-[11px] font-mono">
+            <span className="text-cyan-400 font-medium">{data.flow || (data.capacity ? data.capacity : '—')}</span>
             <span className="text-slate-300">{data.pressure || (data.level ? `${data.level}` : '')}</span>
           </div>
         </div>
       </div>
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-sky-400" />
+      <Handle type="source" position={Position.Right} className="!h-3 !w-3 !rounded-full !border-2 !border-[#091526] !bg-cyan-400 shadow-sm" />
     </div>
   )
 }
 
-const nodeTypes = { default: MinimalNode, input: MinimalNode }
+const nodeTypes = { hydraulic: MinimalNode, default: MinimalNode, input: MinimalNode }
 
 export default function NetworkMap({ incidentActive = false, compact = false, onSelectSegment, scenario = 'leak' }) {
   const [activeNode, setActiveNode] = useState(null)
@@ -95,6 +97,7 @@ export default function NetworkMap({ incidentActive = false, compact = false, on
 
   const nodes = networkNodes.map((n) => ({
     ...n,
+    type: 'hydraulic',
     data: {
       ...n.data,
       alert: incidentActive && (n.data.label.includes('B2') || n.data.label.includes('B3') || n.data.label.includes('Tank')),
