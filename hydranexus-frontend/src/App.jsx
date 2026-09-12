@@ -4,7 +4,9 @@ import Sidebar from './components/Sidebar'
 import PageHeader from './components/PageHeader'
 import NetworkMap from './components/NetworkMap'
 import TelemetryCharts from './components/TelemetryCharts'
-import HydraBackground from './components/HydraBackground'
+import AmbientNetwork from './components/visual/AmbientNetwork'
+import PageTransition from './components/visual/PageTransition'
+import LandingExperience from './components/landing/LandingExperience'
 import { Button } from './components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './components/ui/card'
 import { Badge } from './components/ui/badge'
@@ -81,11 +83,11 @@ function PageSection({ eyebrow, title, description, action, children }) {
 
 function Stat({ label, value, hint, alert = false }) {
   return (
-    <Card>
+    <Card className="border-slate-800/80 bg-[#0c1626]/80 backdrop-blur-sm shadow-md shadow-black/20 hover:border-slate-700/80 transition-all duration-200">
       <CardContent className="pt-5">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`mt-1 text-2xl font-semibold tracking-tight ${alert ? 'text-destructive' : ''}`}>{value}</p>
-        {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+        <p className="text-[11px] font-mono uppercase tracking-wider text-slate-400">{label}</p>
+        <p className={`mt-1 text-2xl font-semibold tracking-tight font-mono ${alert ? 'text-red-400' : 'text-slate-100'}`}>{value}</p>
+        {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
       </CardContent>
     </Card>
   )
@@ -94,14 +96,14 @@ function Stat({ label, value, hint, alert = false }) {
 function Toast({ toast, onClose }) {
   if (!toast) return null
   return (
-    <div className="fixed right-4 top-4 z-50 flex max-w-sm items-start gap-2 rounded-md border bg-background p-3 shadow-md">
+    <div className="fixed right-4 top-4 z-50 flex max-w-sm items-start gap-2.5 rounded-lg border border-slate-700 bg-[#0c1626]/95 backdrop-blur-md p-3.5 shadow-2xl text-slate-100 animate-in fade-in slide-in-from-top-3 duration-200">
       {toast.type === 'danger' ? (
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
       ) : (
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
       )}
-      <p className="text-sm">{toast.message}</p>
-      <button onClick={onClose} className="rounded p-0.5 text-muted-foreground hover:bg-accent" aria-label="Dismiss">
+      <p className="text-xs leading-relaxed text-slate-200">{toast.message}</p>
+      <button onClick={onClose} className="rounded p-0.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors" aria-label="Dismiss">
         <X className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -1618,6 +1620,23 @@ export default function App() {
   const [verified, setVerified] = useState(false)
   const [verifyResult, setVerifyResult] = useState(null)
   const [toast, setToast] = useState(null)
+  const [showLanding, setShowLanding] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !sessionStorage.getItem('hydranexus_briefing_seen')
+    }
+    return true
+  })
+
+  const handleLandingComplete = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('hydranexus_briefing_seen', '1')
+    }
+    setShowLanding(false)
+  }
+
+  const handleReplayBriefing = () => {
+    setShowLanding(true)
+  }
 
   const data = useMemo(
     () =>
@@ -1828,11 +1847,24 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
   }
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground">
-      <HydraBackground />
+    <div className="relative min-h-screen bg-background text-foreground selection:bg-cyan-500/30">
+      {showLanding && (
+        <LandingExperience
+          onComplete={handleLandingComplete}
+          scenario={scenario}
+        />
+      )}
+      <AmbientNetwork incidentActive={active} scenario={scenario} />
       <Toast toast={toast} onClose={() => setToast(null)} />
       <div className="relative z-10 lg:flex">
-        <Sidebar page={page} setPage={setPage} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} incidentActive={active} />
+        <Sidebar
+          page={page}
+          setPage={setPage}
+          mobileOpen={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          incidentActive={active}
+          onReplayBriefing={handleReplayBriefing}
+        />
         <div className="min-w-0 flex-1">
           <PageHeader
             title={meta[0]}
@@ -1842,10 +1874,13 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
             incidentActive={active}
             scenario={scenario}
             onScenarioChange={handleScenarioChange}
+            onReplayBriefing={handleReplayBriefing}
           />
           <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
-            {render()}
-            <footer className="flex flex-col items-center justify-between gap-2 border-t pt-4 text-xs text-muted-foreground sm:flex-row">
+            <PageTransition pageKey={page}>
+              {render()}
+            </PageTransition>
+            <footer className="flex flex-col items-center justify-between gap-2 border-t border-slate-800/80 pt-4 text-xs text-slate-500 sm:flex-row">
               <p>HydraNexus MVP · Demo data — simulated telemetry, no live sensors · Human-in-the-loop</p>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => setPage('privacy')}>
