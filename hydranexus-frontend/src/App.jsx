@@ -1,5 +1,27 @@
 import { useMemo, useState, useEffect } from 'react'
-import { CheckCircle2, AlertTriangle, Download, FileText, Play, X } from 'lucide-react'
+import {
+  CheckCircle2,
+  AlertTriangle,
+  Download,
+  FileText,
+  Play,
+  X,
+  Activity,
+  Search,
+  ShieldCheck,
+  BarChart3,
+  FlaskConical,
+  CheckCircle,
+  ChevronRight,
+  Network,
+  Droplets,
+  Gauge,
+  Zap,
+  Sliders,
+  Clock,
+  ArrowUpRight,
+  TrendingUp,
+} from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import PageHeader from './components/PageHeader'
 import NetworkMap from './components/NetworkMap'
@@ -79,29 +101,86 @@ function PageSection({ eyebrow, title, description, action, children }) {
   )
 }
 
-function Stat({ label, value, hint, alert = false }) {
+function StatCard({ icon: Icon, iconBg, iconColor, label, value, hint, badge, badgeColor, alert = false }) {
   return (
-    <Card>
-      <CardContent className="pt-5">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`mt-1 text-2xl font-semibold tracking-tight ${alert ? 'text-destructive' : ''}`}>{value}</p>
-        {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+    <Card className="border-slate-200/80 bg-white/95 shadow-2xs hover:shadow-xs transition-all">
+      <CardContent className="p-4 pt-4">
+        <div className="flex items-start justify-between">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${iconBg} ${iconColor}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          {badge && (
+            <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold border ${badgeColor}`}>
+              {badge}
+            </span>
+          )}
+        </div>
+        <div className="mt-3">
+          <p className="text-xs font-medium text-slate-500">{label}</p>
+          <p className={`mt-0.5 text-2xl font-bold tracking-tight text-slate-900 ${alert ? 'text-red-600' : ''}`}>
+            {value}
+          </p>
+          {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
+        </div>
       </CardContent>
     </Card>
+  )
+}
+
+function ProcessStepper({ setPage }) {
+  const steps = [
+    { id: 'detect', label: 'Detect', sub: 'Monitor network', icon: Activity, page: 'overview', active: true },
+    { id: 'investigate', label: 'Investigate', sub: 'Find and verify', icon: Search, page: 'incident' },
+    { id: 'verify', label: 'Verify', sub: 'Confirm cause', icon: ShieldCheck, page: 'incident' },
+    { id: 'assess', label: 'Assess', sub: 'Understand impact', icon: BarChart3, page: 'impact' },
+    { id: 'simulate', label: 'Simulate', sub: 'Compare options', icon: FlaskConical, page: 'whatif' },
+    { id: 'decide', label: 'Decide', sub: 'Enable action', icon: CheckCircle, page: 'whatif' },
+  ]
+  return (
+    <div className="flex items-center justify-between gap-1 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-2xs backdrop-blur-xs">
+      {steps.map((step, idx) => {
+        const Icon = step.icon
+        return (
+          <div key={step.id} className="flex items-center gap-1 sm:gap-2">
+            <button
+              onClick={() => setPage(step.page)}
+              className="group flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left transition-colors hover:bg-slate-50"
+            >
+              <div
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-transform group-hover:scale-105 ${
+                  step.active
+                    ? 'bg-blue-600 text-white shadow-2xs shadow-blue-500/30'
+                    : 'border border-slate-200/80 bg-white text-slate-600'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-800 leading-tight group-hover:text-blue-600">{step.label}</div>
+                <div className="text-[10px] text-slate-400 font-medium whitespace-nowrap">{step.sub}</div>
+              </div>
+            </button>
+            {idx < steps.length - 1 && (
+              <span className="text-slate-300 text-xs select-none px-1">┄→</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
 function Toast({ toast, onClose }) {
   if (!toast) return null
   return (
-    <div className="fixed right-4 top-4 z-50 flex max-w-sm items-start gap-2 rounded-md border bg-background p-3 shadow-md">
+    <div className="fixed right-4 top-4 z-50 flex max-w-sm items-start gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-md backdrop-blur-xs">
       {toast.type === 'danger' ? (
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
       ) : (
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
       )}
-      <p className="text-sm">{toast.message}</p>
-      <button onClick={onClose} className="rounded p-0.5 text-muted-foreground hover:bg-accent" aria-label="Dismiss">
+      <p className="text-sm text-slate-800">{toast.message}</p>
+      <button onClick={onClose} className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Dismiss">
         <X className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -129,6 +208,7 @@ function Overview({ active, data, scenario = 'leak', setPage, trigger, onExport 
       cancelled = true
     }
   }, [active, scenario, data])
+
   const flow = last?.flow ?? (active ? (scenario === 'burst' ? 15300 : 11500) : 8180)
   const pressure = last?.pressure ?? (active ? (scenario === 'burst' ? 2.3 : 3.3) : 4.0)
   const loss = ai?.impact?.lossPerHour ?? (active ? profile.lossPerHour : 0)
@@ -137,83 +217,248 @@ function Overview({ active, data, scenario = 'leak', setPage, trigger, onExport 
   const zone = ai?.location?.zone ? `Zone ${ai.location.zone}` : profile.zone
   const confidence = ai?.confidence ?? profile.confidence
   const severity = ai?.severity ?? profile.severity
+
+  const flowDiff = Math.round(((flow - 8000) / 8000) * 100)
+  const pressureDiff = Math.round(((pressure - 4.0) / 4.0) * 100)
+
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Status" value={active ? 'Investigating' : 'Normal'} hint={active ? `1 ${severity.toLowerCase()}-severity incident (${scenario})` : 'Within baseline'} alert={active} />
-        <Stat label="Flow" value={`${fmt(Math.round(flow))} L/hr`} hint="Baseline ≈ 8,000 L/hr" alert={flow > 9000} />
-        <Stat label="Avg. pressure" value={`${Number(pressure).toFixed(1)} bar`} hint="Baseline ≈ 4.0 bar" alert={pressure < 3.6} />
-        <Stat label="Est. loss" value={`${fmt(Math.round(loss))} L/hr`} hint={active ? `Potential ${hypothesis.toLowerCase()}` : 'No active loss'} alert={active && loss > 500} />
+      {/* Hero Header from Reference Design */}
+      <div className="space-y-1">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">OVERVIEW</p>
+        <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          Network health at a glance
+        </h2>
+        <p className="text-xs text-slate-500 sm:text-sm">
+          Real-time monitoring, intelligent insights and decision support for resilient water networks.
+        </p>
       </div>
 
+      {/* Interactive Process Stepper from Reference Design */}
+      <ProcessStepper setPage={setPage} />
+
+      {/* 4 Top KPI Stat Cards from Reference Design */}
+      <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          icon={Activity}
+          iconBg="bg-emerald-50 border-emerald-100/70"
+          iconColor="text-emerald-600"
+          label="Network Status"
+          value={active ? 'Investigating' : 'Normal'}
+          hint={active ? `1 ${severity.toLowerCase()}-severity incident (${scenario})` : 'Within baseline'}
+          alert={active}
+        />
+        <StatCard
+          icon={Droplets}
+          iconBg="bg-sky-50 border-sky-100/70"
+          iconColor="text-sky-600"
+          label="Total Flow"
+          value={`${fmt(Math.round(flow))} L/hr`}
+          hint="Baseline ≈ 8,000 L/hr"
+          badge={flowDiff >= 0 ? `↑ +${flowDiff}%` : `↓ ${flowDiff}%`}
+          badgeColor={flowDiff > 5 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}
+          alert={flow > 9500}
+        />
+        <StatCard
+          icon={Gauge}
+          iconBg="bg-blue-50 border-blue-100/70"
+          iconColor="text-blue-600"
+          label="Avg. Pressure"
+          value={`${Number(pressure).toFixed(1)} bar`}
+          hint="Baseline ≈ 4.0 bar"
+          badge={pressureDiff === 0 ? '⟳ 0%' : pressureDiff < 0 ? `↓ ${Math.abs(pressureDiff)}%` : `↑ +${pressureDiff}%`}
+          badgeColor={pressureDiff < -5 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-slate-50 text-slate-500 border-slate-200'}
+          alert={pressure < 3.6}
+        />
+        <StatCard
+          icon={TrendingUp}
+          iconBg="bg-sky-50 border-sky-100/70"
+          iconColor="text-sky-600"
+          label="Est. Water Loss"
+          value={`${fmt(Math.round(loss))} L/hr`}
+          hint={active ? `Potential ${hypothesis.toLowerCase()}` : 'No active loss'}
+          badge={loss > 0 ? `↑ +${Math.round((loss / 8000) * 100)}%` : '↓ 0%'}
+          badgeColor={loss > 0 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}
+          alert={active && loss > 500}
+        />
+      </div>
+
+      {/* Main Central Layout: 2 Columns Network Topology + 1 Column Right Actions */}
       <div className="grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="text-sm font-medium">Network</CardTitle>
-              <CardDescription>Simulated topology</CardDescription>
+        {/* Left 2 Cols: Network Topology Map */}
+        <Card className="xl:col-span-2 border-slate-200/80 bg-white/95 shadow-2xs">
+          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-100">
+                <Network className="h-4 w-4" />
+              </div>
+              <div>
+                <CardTitle className="text-sm font-semibold text-slate-900">Network</CardTitle>
+                <CardDescription className="text-xs text-slate-400">Simulated topology</CardDescription>
+              </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setPage('network')}>
-              Open map
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage('network')}
+              className="rounded-lg border-blue-200 bg-blue-50/50 text-blue-600 hover:bg-blue-100/50 hover:text-blue-700 text-xs font-medium h-8 gap-1.5"
+            >
+              Open map <ArrowUpRight className="h-3.5 w-3.5" />
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <NetworkMap incidentActive={active} compact scenario={scenario} onSelectSegment={() => setPage('network')} />
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">{active ? 'Active incident' : 'No active incident'}</CardTitle>
-            <CardDescription>{active ? `${segment} · ${zone} · ${scenario}` : 'System nominal'}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {active ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">{hypothesis}</span>
-                  <Badge variant={severity === 'HIGH' ? 'destructive' : 'outline'}>{severity}</Badge>
-                </div>
-                <Separator />
-                <dl className="space-y-1.5 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Confidence</dt>
-                    <dd className="font-medium">{confidence}%</dd>
+        {/* Right 1 Col: Incident Card, Quick Actions, and Brand Quote Card */}
+        <div className="space-y-4">
+          {/* Incident Card */}
+          <Card className="border-slate-200/80 bg-white/95 shadow-2xs">
+            <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+              <div className="flex items-center gap-2">
+                {active ? (
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-50 text-red-600">
+                    <AlertTriangle className="h-3.5 w-3.5" />
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Est. loss</dt>
-                    <dd className="font-medium">{fmt(Math.round(loss))} L/hr</dd>
+                ) : (
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                   </div>
-                </dl>
-                <div className="flex gap-2 pt-1">
-                  <Button size="sm" onClick={() => setPage('incident')}>
-                    Investigate
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setPage('whatif')}>
-                    What-if
-                  </Button>
+                )}
+                <div>
+                  <CardTitle className="text-xs font-semibold text-slate-800">
+                    {active ? 'Active incident' : 'No active incident'}
+                  </CardTitle>
+                  <CardDescription className="text-[10px] text-slate-400">
+                    {active ? `${segment} · ${zone} · ${scenario}` : 'System nominal'}
+                  </CardDescription>
                 </div>
-                <Button size="sm" variant="ghost" onClick={onExport}>
-                  <Download /> Export report
-                </Button>
-              </>
-            ) : (
-              <div className="flex flex-col items-center py-6 text-center">
-                <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-                <p className="mt-2 text-sm font-medium">Network looks healthy</p>
-                <p className="mt-1 text-xs text-muted-foreground">Inject a controlled incident to test the workflow.</p>
-                <Button size="sm" className="mt-3" onClick={trigger}>
-                  <Play /> Trigger simulated leak
-                </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              {active && (
+                <Badge variant={severity === 'HIGH' || severity === 'CRITICAL' ? 'destructive' : 'outline'}>
+                  {severity}
+                </Badge>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-3 pt-1">
+              {active ? (
+                <>
+                  <div className="rounded-xl border border-red-100 bg-red-50/40 p-3">
+                    <div className="text-xs font-bold text-red-950">{hypothesis}</div>
+                    <div className="mt-1 flex justify-between text-[11px] text-red-800">
+                      <span>Confidence: <strong className="font-semibold">{confidence}%</strong></span>
+                      <span>Est. loss: <strong className="font-semibold">{fmt(Math.round(loss))} L/hr</strong></span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium h-8" onClick={() => setPage('incident')}>
+                      Investigate
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1 rounded-lg border-slate-200 text-slate-700 text-xs font-medium h-8" onClick={() => setPage('whatif')}>
+                      What-if
+                    </Button>
+                  </div>
+                  <Button size="sm" variant="ghost" className="w-full text-xs text-slate-600 hover:text-slate-900 h-7" onClick={onExport}>
+                    <Download className="h-3 w-3 mr-1" /> Export report
+                  </Button>
+                </>
+              ) : (
+                <div className="flex flex-col items-center py-4 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-emerald-500 bg-emerald-50 text-emerald-600 shadow-2xs">
+                    <CheckCircle2 className="h-7 w-7" />
+                  </div>
+                  <h4 className="mt-3 text-sm font-bold text-slate-800">Network looks healthy</h4>
+                  <p className="mt-1 text-xs text-slate-400">Inject a controlled incident to test the workflow.</p>
+                  <Button
+                    size="sm"
+                    className="mt-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs font-medium text-xs px-4 py-2"
+                    onClick={trigger}
+                  >
+                    <Play className="h-3 w-3 mr-1.5 fill-current" /> Trigger simulated leak
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions Card */}
+          <Card className="border-slate-200/80 bg-white/95 shadow-2xs">
+            <CardHeader className="flex-row items-center gap-2 space-y-0 pb-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-50 text-blue-600">
+                <Zap className="h-3.5 w-3.5" />
+              </div>
+              <CardTitle className="text-xs font-bold text-slate-900">Quick actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-0.5 pt-0">
+              <button
+                onClick={() => setPage('network')}
+                className="group flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Network className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600" />
+                  <span>View network map</span>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600" />
+              </button>
+              <button
+                onClick={() => setPage('whatif')}
+                className="group flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Sliders className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600" />
+                  <span>Run what-if scenario</span>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600" />
+              </button>
+              <button
+                onClick={() => setPage('history')}
+                className="group flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Clock className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600" />
+                  <span>Check recent activity</span>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600" />
+              </button>
+              <button
+                onClick={onExport}
+                className="group flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <FileText className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600" />
+                  <span>Generate report</span>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600" />
+              </button>
+            </CardContent>
+          </Card>
+
+          {/* Brand Quote Card from Reference Design */}
+          <div className="flex items-center gap-3 rounded-2xl border border-blue-100/60 bg-gradient-to-r from-sky-50/40 via-blue-50/30 to-indigo-50/20 p-3.5 shadow-2xs">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-sky-500 shadow-2xs border border-sky-100">
+              <Droplets className="h-4 w-4 fill-sky-100" />
+            </div>
+            <p className="text-xs italic text-slate-600 leading-snug">
+              “Intelligent infrastructure for more resilient cities.”
+            </p>
+          </div>
+        </div>
       </div>
 
-      <PageSection eyebrow="Telemetry" title="Network pulse" description="Simulated feed with anomaly scoring.">
+      {/* Bottom Live Telemetry Section from Reference Design */}
+      <section className="space-y-3 pt-2">
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">TELEMETRY</p>
+            <h3 className="text-base font-bold tracking-tight text-slate-900">Live network feed</h3>
+          </div>
+          <span className="text-xs text-slate-400 font-medium">
+            Last updated: {last?.time ? `${last.time}:00` : '15:24:12'}
+          </span>
+        </div>
         <TelemetryCharts data={data} />
-      </PageSection>
+      </section>
 
       <PageSection eyebrow="Zones" title="Zone health">
         <div className="grid gap-3 md:grid-cols-3">
@@ -1843,7 +2088,7 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
             scenario={scenario}
             onScenarioChange={handleScenarioChange}
           />
-          <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+          <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
             {render()}
             <footer className="flex flex-col items-center justify-between gap-2 border-t pt-4 text-xs text-muted-foreground sm:flex-row">
               <p>HydraNexus MVP · Demo data — simulated telemetry, no live sensors · Human-in-the-loop</p>

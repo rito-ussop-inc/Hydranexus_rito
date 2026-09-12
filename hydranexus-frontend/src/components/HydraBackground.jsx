@@ -32,6 +32,13 @@ function HydraBackground() {
             <circle cx="2" cy="2" r="0.85" fill="#3b82f6" fillOpacity="0.04" />
           </pattern>
 
+          {/* Soft ambient radial glow gradient */}
+          <radialGradient id="soft-glow-blue" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
+            <stop offset="45%" stopColor="#0ea5e9" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="#0284c7" stopOpacity="0" />
+          </radialGradient>
+
           {/* Faint particle glow filter */}
           <filter id="hydra-glow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" />
@@ -129,6 +136,33 @@ function HydraBackground() {
             <animate attributeName="r" values="3;6;3" dur="13s" begin="5s" repeatCount="indefinite" />
             <animate attributeName="opacity" values="0.08;0.02;0.08" dur="13s" begin="5s" repeatCount="indefinite" />
           </circle>
+        </g>
+
+        {/* Soft glowing ambient nodes matching reference mockup */}
+        <g className="ambient-glow-nodes">
+          {/* Upper right header glow clusters */}
+          <circle cx="1020" cy="110" r="16" fill="url(#soft-glow-blue)" />
+          <circle cx="1020" cy="110" r="2.5" fill="#38bdf8" opacity="0.5" />
+          <circle cx="1180" cy="80" r="20" fill="url(#soft-glow-blue)" />
+          <circle cx="1180" cy="80" r="3" fill="#38bdf8" opacity="0.6" />
+          <circle cx="1360" cy="160" r="24" fill="url(#soft-glow-blue)" />
+          <circle cx="1360" cy="160" r="3.5" fill="#0ea5e9" opacity="0.7" />
+
+          {/* Mid-right clusters */}
+          <circle cx="1320" cy="420" r="18" fill="url(#soft-glow-blue)" />
+          <circle cx="1320" cy="420" r="2.5" fill="#38bdf8" opacity="0.45" />
+
+          {/* Left sidebar & background ambient nodes */}
+          <circle cx="90" cy="380" r="16" fill="url(#soft-glow-blue)" />
+          <circle cx="90" cy="380" r="2.5" fill="#38bdf8" opacity="0.4" />
+          <circle cx="70" cy="620" r="18" fill="url(#soft-glow-blue)" />
+          <circle cx="70" cy="620" r="3" fill="#38bdf8" opacity="0.45" />
+
+          {/* Central connecting nodes */}
+          <circle cx="650" cy="480" r="14" fill="url(#soft-glow-blue)" />
+          <circle cx="650" cy="480" r="2" fill="#38bdf8" opacity="0.4" />
+          <circle cx="890" cy="480" r="18" fill="url(#soft-glow-blue)" />
+          <circle cx="890" cy="480" r="2.5" fill="#38bdf8" opacity="0.45" />
         </g>
 
         {/* Slow Ambient Flow Pulses (8s-14s linear movement; low opacity; disabled on reduced motion) */}
