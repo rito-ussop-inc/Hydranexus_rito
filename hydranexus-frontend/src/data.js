@@ -152,7 +152,7 @@ export const whatIfOptions = {
 }
 
 export const networkNodes = [
-  { id: 'reservoir', position: { x: 40, y: 180 }, data: { label: '💧 Reservoir', type: 'Source', capacity: '120,000 m³', pressure: '4.5 bar' }, type: 'input' },
+  { id: 'reservoir', position: { x: 40, y: 180 }, data: { label: 'Reservoir', type: 'Source', capacity: '120,000 m³', pressure: '4.5 bar' }, type: 'input' },
   { id: 'n1', position: { x: 260, y: 180 }, data: { label: 'N1 · Main Junction', type: 'Distribution', flow: '8,200 L/h', pressure: '4.2 bar' } },
   { id: 'n2', position: { x: 500, y: 80 }, data: { label: 'N2 · Zone A', type: 'Sub-district', flow: '1,980 L/h', pressure: '4.1 bar' } },
   { id: 'n3', position: { x: 500, y: 280 }, data: { label: 'N3 · B2 Junction', type: 'Arterial Feed', flow: '3,060 L/h', pressure: '3.9 bar' } },

@@ -18,7 +18,7 @@ import networkx as nx
 def build_graph() -> nx.DiGraph:
     g = nx.DiGraph()
     nodes = [
-        ("reservoir", {"label": "💧 Reservoir", "type": "Source", "capacity": "120,000 m³", "pressure": "4.5 bar", "zone": None, "x": 40, "y": 180}),
+        ("reservoir", {"label": "Reservoir", "type": "Source", "capacity": "120,000 m³", "pressure": "4.5 bar", "zone": None, "x": 40, "y": 180}),
         ("n1", {"label": "N1 · Main Junction", "type": "Distribution", "flow": "8,200 L/h", "pressure": "4.2 bar", "zone": None, "x": 260, "y": 180}),
         ("n2", {"label": "N2 · Zone A", "type": "Sub-district", "flow": "1,980 L/h", "pressure": "4.1 bar", "zone": "A", "x": 500, "y": 80}),
         ("n3", {"label": "N3 · B2 Junction", "type": "Arterial Feed", "flow": "3,060 L/h", "pressure": "3.9 bar", "zone": "B", "x": 500, "y": 280}),
