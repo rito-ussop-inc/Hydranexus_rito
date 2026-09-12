@@ -62,6 +62,18 @@ def test_detect_leak():
     assert j["impact"]["lossPerHour"] > 1000
 
 
+def test_detect_burst():
+    data = generate_telemetry("burst")
+    r = client.post("/api/ai/detect", json={"telemetry": data})
+    j = r.json()
+    assert j["anomaly"] is True
+    assert j["severity"] == "HIGH"
+    assert j["primaryHypothesis"] == "Confirmed Burst"
+    assert "explanation" in j
+    assert j["explanation"]["diagnosis"]["primary"] == "Confirmed Burst"
+    assert "pipe burst" in j["explanation"]["summary"].lower()
+
+
 def test_detect_normal():
     data = generate_telemetry("normal")
     r = client.post("/api/ai/detect", json={"telemetry": data})

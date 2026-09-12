@@ -85,15 +85,17 @@ def rank_causes(flow_d: float, pressure_d: float, cons_d: float, anomaly_score: 
 
     leak = 0.0
     if flow_d > 15 and pressure_d < -8 and ac < 14:
-        leak = 55 + min(flow_d, 45) * 0.7 + min(ap, 20) * 0.8
+        leak = 55 + min(flow_d, 40) * 0.7 + min(ap, 20) * 0.8
     elif flow_d > 10 and pressure_d < -5:
         leak = 35 + min(flow_d, 30) * 0.5
 
     burst = 0.0
-    if flow_d > 55 and pressure_d < -22:
-        burst = 70 + min(flow_d - 55, 40) * 0.6 + min(ap - 22, 25) * 0.7
-    elif flow_d > 40 and pressure_d < -15:
-        burst = 40 + (flow_d - 40) * 0.5
+    if (flow_d > 45 and pressure_d < -18) or (flow_d > 60 and pressure_d < -15):
+        burst = 80 + min(flow_d - 45, 50) * 0.7 + min(ap - 18, 30) * 0.7
+        # Severe surge indicates a major rupture rather than a standard pinhole leak
+        leak = max(15.0, leak - 35.0)
+    elif flow_d > 35 and pressure_d < -12:
+        burst = 45 + (flow_d - 35) * 0.5 + (ap - 12) * 0.5
 
     demand = 0.0
     if cons_d > 22 and flow_d > 12 and pressure_d > -12:
@@ -193,7 +195,7 @@ def fuse_hydraulic_structural(causes: list[dict], dev: dict, eddy_last: float, e
     # Burst vs leak is decided by signature magnitude (robust to rule ties):
     # burst = very large flow rise + very deep pressure drop.
     if high_flow_drop and eddy_last >= EDDY_CRACK:
-        burst_pattern = flow_d > 55 and pressure_d < -22
+        burst_pattern = (flow_d > 45 and pressure_d < -18) or flow_d > 55 or pressure_d < -22
         confirmed = "Confirmed Burst" if burst_pattern else "Confirmed Leak"
         sibling = "Pipeline Leak" if burst_pattern else "Pipe Burst"
         sib_score = next((c["score"] for c in causes if c["cause"] == sibling), 0.0)

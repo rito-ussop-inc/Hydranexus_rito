@@ -109,8 +109,9 @@ function Toast({ toast, onClose }) {
 
 /* ------------------------------- Overview ------------------------------- */
 
-function Overview({ active, data, scenario, setPage, trigger, onExport }) {
+function Overview({ active, data, scenario = 'leak', setPage, trigger, onExport }) {
   const last = data?.at(-1)
+  const profile = SCENARIO_PROFILES[scenario] || SCENARIO_PROFILES.leak
   const [ai, setAi] = useState(null)
   useEffect(() => {
     let cancelled = false
@@ -126,15 +127,15 @@ function Overview({ active, data, scenario, setPage, trigger, onExport }) {
     return () => {
       cancelled = true
     }
-  }, [active, scenario])
-  const flow = last?.flow ?? (active ? 11500 : 8180)
-  const pressure = last?.pressure ?? (active ? 3.3 : 4.0)
-  const loss = ai?.impact?.lossPerHour ?? (active ? 3500 : 0)
-  const hypothesis = ai?.primaryHypothesis ?? 'Probable pipeline leak'
-  const segment = ai?.location?.segment ?? 'B2 → B3'
-  const zone = ai?.location?.zone ? `Zone ${ai.location.zone}` : 'Zone B'
-  const confidence = ai?.confidence ?? 76
-  const severity = ai?.severity ?? 'HIGH'
+  }, [active, scenario, data])
+  const flow = last?.flow ?? (active ? (scenario === 'burst' ? 15300 : 11500) : 8180)
+  const pressure = last?.pressure ?? (active ? (scenario === 'burst' ? 2.3 : 3.3) : 4.0)
+  const loss = ai?.impact?.lossPerHour ?? (active ? profile.lossPerHour : 0)
+  const hypothesis = ai?.primaryHypothesis ?? profile.primary ?? profile.title
+  const segment = ai?.location?.segment ?? profile.location
+  const zone = ai?.location?.zone ? `Zone ${ai.location.zone}` : profile.zone
+  const confidence = ai?.confidence ?? profile.confidence
+  const severity = ai?.severity ?? profile.severity
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -407,6 +408,143 @@ const XAI_BASELINES = { flow: 8000, pressure: 4.0, consumption: 3000, level: 3.2
 const XAI_UNITS = { flow: 'L/hr', pressure: 'bar', consumption: 'L/hr', level: 'm' }
 const XAI_LABELS = { flow: 'Flow', pressure: 'Pressure', consumption: 'Consumption', level: 'Tank Level' }
 
+export const SCENARIO_PROFILES = {
+  leak: {
+    title: 'Probable pipeline leak',
+    primary: 'Confirmed Leak',
+    severity: 'HIGH',
+    confidence: 76,
+    location: 'B2 → B3',
+    zone: 'Zone B',
+    lossPerHour: 3500,
+    loss24h: 84000,
+    flowChange: 43.8,
+    pressureChange: -17.5,
+    causes: [
+      ['Confirmed Leak', 76],
+      ['Pipeline Leak', 14],
+      ['Demand Spike', 6],
+      ['Valve Issue', 4],
+    ],
+    evidence: [
+      'Flow increased by +43.8% at main arterial inlet B2',
+      'Pressure dropped by -17.5% across downstream sensor B3',
+      'End-user metered consumption remained stable (no demand spike pattern)',
+      'Eddy-current sensor detected structural crack (variance 0.85) — wall breached',
+    ],
+  },
+  burst: {
+    title: 'Probable pipe burst',
+    primary: 'Confirmed Burst',
+    severity: 'HIGH',
+    confidence: 86,
+    location: 'B2 → B3',
+    zone: 'Zone B',
+    lossPerHour: 7000,
+    loss24h: 168000,
+    flowChange: 91.2,
+    pressureChange: -42.5,
+    causes: [
+      ['Confirmed Burst', 86],
+      ['Pipeline Leak', 14],
+      ['Demand Spike', 0],
+      ['Sensor Fault', 0],
+    ],
+    evidence: [
+      'Catastrophic flow surge (+91.2%) at main arterial inlet B2',
+      'Severe pressure collapse (-42.5%) across downstream sensor B3',
+      'Storage tank level dropped rapidly to 1.95 m (rapid reservoir depletion)',
+      'Eddy-current sensor confirmed critical pipe rupture (variance 0.92)',
+    ],
+  },
+  demand: {
+    title: 'Possible demand spike',
+    primary: 'Demand Spike',
+    severity: 'MEDIUM',
+    confidence: 83,
+    location: 'N1 → Zone C',
+    zone: 'Zone C',
+    lossPerHour: 0,
+    loss24h: 0,
+    flowChange: 35.4,
+    pressureChange: -10.0,
+    causes: [
+      ['Demand Spike', 83],
+      ['Valve Issue', 8],
+      ['Pipeline Leak', 6],
+      ['Sensor Fault', 3],
+    ],
+    evidence: [
+      'Metered consumer draw jumped +46.7% across Zone C sub-district',
+      'Pressure reduced modestly (-10.0%) during peak consumption draw',
+      'Structural wall intact (eddy-current variance 0.02) — breach ruled out',
+    ],
+  },
+  sensor: {
+    title: 'Suspected sensor fault',
+    primary: 'Sensor Fault',
+    severity: 'LOW',
+    confidence: 80,
+    location: 'N1 → B2',
+    zone: 'Zone B',
+    lossPerHour: 0,
+    loss24h: 0,
+    flowChange: 2.2,
+    pressureChange: -22.5,
+    causes: [
+      ['Sensor Fault', 80],
+      ['Valve Issue', 12],
+      ['Demand Spike', 5],
+      ['Pipeline Leak', 3],
+    ],
+    evidence: [
+      'Pressure transmitter reported sharp drop without corresponding flow increase',
+      'Storage tank level held steady at 3.10 m (rules out actual physical water loss)',
+      'Structural wall intact (eddy variance 0.02) — sensor recalibration required',
+    ],
+  },
+  corrosion: {
+    title: 'Early pipe corrosion watch',
+    primary: 'Early Corrosion',
+    severity: 'MEDIUM',
+    confidence: 75,
+    location: 'B2 → B3',
+    zone: 'Zone B',
+    lossPerHour: 0,
+    loss24h: 0,
+    flowChange: 2.2,
+    pressureChange: 0.0,
+    causes: [
+      ['Early Corrosion', 75],
+      ['Valve Issue', 10],
+      ['Pipeline Leak', 8],
+      ['Sensor Fault', 7],
+    ],
+    evidence: [
+      'Hydraulic readings normal (flow 8,180 L/hr, pressure 4.0 bar)',
+      'Eddy-current variance creeping upward to 0.44 (trend +0.22)',
+      'Early wall degradation without a breach — schedule maintenance before failure',
+    ],
+  },
+  normal: {
+    title: 'Normal operation',
+    primary: 'Normal Operation',
+    severity: 'NORMAL',
+    confidence: 98,
+    location: 'All segments',
+    zone: 'All zones',
+    lossPerHour: 0,
+    loss24h: 0,
+    flowChange: 0.0,
+    pressureChange: 0.0,
+    causes: [
+      ['Normal Operation', 98],
+      ['Valve Issue', 2],
+    ],
+    evidence: ['All network telemetry operating within expected baseline envelopes.'],
+  },
+}
+
 function xaiInterpretation(score) {
   if (score >= 0.9) return 'Highly abnormal operating condition.'
   if (score >= 0.7) return 'Strongly abnormal operating condition.'
@@ -415,16 +553,16 @@ function xaiInterpretation(score) {
   return 'Within the normal operating range.'
 }
 
-// Offline fallback built only from the displayed feed + documented baselines.
-// Labeled as mock in the UI; never presented as a backend calculation.
-function mockExplanation(last, fb) {
+function buildSignals(last, dev = null) {
   const bands = { flow: [25, 12], pressure: [15, 8], consumption: [25, 12], level: [10, 5] }
-  const signals = ['flow', 'pressure', 'consumption', 'level']
+  return ['flow', 'pressure', 'consumption', 'level']
     .map((feature) => {
       const raw = last?.[feature]
       if (raw == null || !Number.isFinite(Number(raw))) return null
       const base = XAI_BASELINES[feature]
-      const change = Math.round(((Number(raw) - base) / base) * 1000) / 10
+      const change = dev?.[feature] != null
+        ? Number(dev[feature])
+        : Math.round(((Number(raw) - base) / base) * 1000) / 10
       const direction = change >= 2 ? 'increase' : change <= -2 ? 'decrease' : 'stable'
       const mag = Math.abs(change)
       const impact = mag >= bands[feature][0] ? 'high' : mag >= bands[feature][1] ? 'medium' : 'low'
@@ -436,19 +574,57 @@ function mockExplanation(last, fb) {
       return { feature, value: Number(raw), baseline: base, change_percent: change, direction, impact, reason }
     })
     .filter(Boolean)
-  const primary = (fb.title ?? '').replace('Probable ', '').replace('Possible ', '')
+}
+
+function mockExplanation(last, profile) {
+  const signals = buildSignals(last)
   const score = Number(last?.anomalyScore ?? 0)
   return {
-    summary: fb.title ?? 'Incident',
-    confidence: fb.confidence ?? 0,
-    severity: fb.severity ?? 'Unknown',
+    summary: profile.title ?? 'Incident',
+    confidence: profile.confidence ?? 0,
+    severity: profile.severity ?? 'Unknown',
     signals,
-    evidence: fb.evidence ?? [],
+    evidence: profile.evidence ?? [],
+    model: { name: 'Isolation Forest', anomaly_score: score, interpretation: xaiInterpretation(score) },
+    diagnosis: {
+      primary: profile.primary ?? profile.title,
+      confidence: profile.confidence ?? 0,
+      alternatives: (profile.causes ?? []).slice(1, 4).map(([cause, confidence]) => ({ cause, confidence })),
+    },
+  }
+}
+
+function synthesizeExplanationFromAi(ai, last, profile) {
+  const signals = buildSignals(last, ai.deviation_pct)
+  const primary = ai.primaryHypothesis || profile?.primary || 'Unknown'
+  const confidence = ai.confidence ?? profile?.confidence ?? 0
+  const severity = ai.severity ?? profile?.severity ?? 'HIGH'
+  const score = ai.anomalyScore != null ? Number(ai.anomalyScore) : Number(last?.anomalyScore ?? 0)
+
+  const noun = primary.toLowerCase()
+  const summary =
+    confidence >= 80
+      ? `High probability of ${noun}`
+      : confidence >= 60
+        ? `Probable ${noun}`
+        : `Possible ${noun}`
+
+  const alternatives = (ai.causes ?? profile?.causes ?? []).slice(1, 4).map((c) => {
+    if (Array.isArray(c)) return { cause: c[0], confidence: c[1] }
+    return { cause: c.cause, confidence: c.score }
+  })
+
+  return {
+    summary,
+    confidence,
+    severity,
+    signals,
+    evidence: ai.evidence && ai.evidence.length ? ai.evidence : profile?.evidence ?? [],
     model: { name: 'Isolation Forest', anomaly_score: score, interpretation: xaiInterpretation(score) },
     diagnosis: {
       primary,
-      confidence: fb.confidence ?? 0,
-      alternatives: (fb.causes ?? []).slice(1, 4).map(([cause, confidence]) => ({ cause, confidence })),
+      confidence,
+      alternatives,
     },
   }
 }
@@ -466,10 +642,20 @@ function SignalValue({ signal }) {
   )
 }
 
-function EvidenceDiagnosisCard({ active, ai, data, fallback, segment, live, setPage }) {
+function EvidenceDiagnosisCard({ active, ai, data, scenario = 'leak', segment, live, setPage }) {
   const [showReasoning, setShowReasoning] = useState(true)
   const last = data?.at(-1)
-  const expl = ai?.explanation ?? (active && last ? mockExplanation(last, fallback) : null)
+  const profile = SCENARIO_PROFILES[scenario] || SCENARIO_PROFILES.leak
+
+  const expl = useMemo(() => {
+    if (!active || !last) return null
+    if (ai?.explanation) return ai.explanation
+    if (ai && (ai.primaryHypothesis || ai.causes)) {
+      return synthesizeExplanationFromAi(ai, last, profile)
+    }
+    return mockExplanation(last, profile)
+  }, [active, ai, last, profile])
+
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -589,8 +775,8 @@ function EvidenceDiagnosisCard({ active, ai, data, fallback, segment, live, setP
 
 /* ------------------------------ Investigation ---------------------------- */
 
-function InvestigationPage({ active, verify, verified, verifyResult, onExport, onExportPDF, data, scenario, setPage }) {
-  const fallback = incidents[0]
+function InvestigationPage({ active, verify, verified, verifyResult, onExport, onExportPDF, data, scenario = 'leak', setScenario, setPage }) {
+  const fallback = SCENARIO_PROFILES[scenario] || SCENARIO_PROFILES.leak
   const [ai, setAi] = useState(null)
   const [live, setLive] = useState(false)
 
@@ -601,7 +787,7 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, o
       setLive(false)
       return
     }
-    const payload = data && data.length ? data : fallback ? [] : []
+    const payload = data && data.length ? data : []
     if (!payload.length) return
     postDetect(payload)
       .then((res) => {
@@ -621,13 +807,13 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, o
     }
   }, [active, scenario, data])
 
-  const causes = ai?.causes?.map((c) => [c.cause, c.score]) ?? fallback.causes
-  const evidence = ai?.evidence ?? fallback.evidence
-  const flowChg = ai?.deviation_pct ? `${ai.deviation_pct.flow >= 0 ? '+' : ''}${ai.deviation_pct.flow.toFixed(1)}%` : `+${fallback.flowChange}%`
+  const causes = ai?.causes?.map((c) => (Array.isArray(c) ? c : [c.cause, c.score])) ?? fallback.causes
+  const evidence = ai?.evidence && ai.evidence.length ? ai.evidence : fallback.evidence
+  const flowChg = ai?.deviation_pct ? `${ai.deviation_pct.flow >= 0 ? '+' : ''}${ai.deviation_pct.flow.toFixed(1)}%` : `${fallback.flowChange >= 0 ? '+' : ''}${fallback.flowChange}%`
   const pressChg = ai?.deviation_pct ? `${ai.deviation_pct.pressure >= 0 ? '+' : ''}${ai.deviation_pct.pressure.toFixed(1)}%` : `${fallback.pressureChange}%`
   const segment = ai?.location?.segment ?? fallback.location
   const locConf = ai?.location?.confidence ?? fallback.confidence
-  const hypothesis = ai?.primaryHypothesis ?? fallback.title.replace('Probable ', '').replace('Possible ', '')
+  const hypothesis = ai?.primaryHypothesis ?? fallback.primary ?? fallback.title
   const severity = ai?.severity ?? fallback.severity
   const anomalyScore = ai?.anomalyScore ?? null
   const pipe = ai?.pipeCondition ?? null
@@ -638,7 +824,21 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, o
         eyebrow="Investigation"
         title="Why is the network abnormal?"
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {setScenario && (
+              <select
+                value={scenario}
+                onChange={(e) => setScenario(e.target.value)}
+                className="h-8 rounded-md border border-input bg-background px-2 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
+                aria-label="Select anomaly scenario"
+              >
+                <option value="leak">Pipeline leak</option>
+                <option value="burst">Pipe burst</option>
+                <option value="demand">Demand spike</option>
+                <option value="sensor">Sensor fault</option>
+                <option value="corrosion">Early corrosion</option>
+              </select>
+            )}
             {live ? <Badge variant="secondary">Live AI</Badge> : <Badge variant="outline">Mock fallback</Badge>}
             {verified ? <Badge variant="secondary">Verified</Badge> : <Badge variant="outline">Needs verification</Badge>}
           </div>
@@ -718,7 +918,7 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, o
           active={active}
           ai={ai}
           data={data}
-          fallback={fallback}
+          scenario={scenario}
           segment={segment}
           live={live}
           setPage={setPage}
@@ -785,8 +985,8 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, o
 
 /* --------------------------------- Impact -------------------------------- */
 
-function ImpactPage({ active, data, scenario }) {
-  const fallback = incidents[0]
+function ImpactPage({ active, data, scenario = 'leak' }) {
+  const fallback = SCENARIO_PROFILES[scenario] || SCENARIO_PROFILES.leak
   const [impact, setImpact] = useState(null)
   const [live, setLive] = useState(false)
 
@@ -829,7 +1029,7 @@ function ImpactPage({ active, data, scenario }) {
   const loss = impact?.impact?.lossPerHour ?? fallback.lossPerHour
   const loss24 = impact?.impact?.loss24h ?? fallback.loss24h
   const zone = impact?.impact?.affectedZone ?? fallback.zone
-  const users = impact?.impact?.affectedUsers ?? 560
+  const users = impact?.impact?.affectedUsers ?? (fallback.zone === 'Zone C' ? 380 : 560)
   const severity = impact?.severity ?? fallback.severity
   const pipe = impact?.pipeCondition ?? null
   return (
@@ -1434,16 +1634,30 @@ export default function App() {
     [scenario]
   )
 
-  const trigger = () => {
-    const next = !active
-    setActive(next)
-    setScenario(next ? 'leak' : 'normal')
+  const handleScenarioChange = (s) => {
+    setScenario(s)
+    const nextActive = s !== 'normal'
+    setActive(nextActive)
     setVerified(false)
     setVerifyResult(null)
-    setToast({
-      message: next ? 'Leak anomaly detected on segment B2 → B3.' : 'Returned to normal baseline.',
-      type: next ? 'danger' : 'success',
-    })
+    const toastMap = {
+      leak: { message: 'Pipeline leak anomaly detected on segment B2 → B3.', type: 'danger' },
+      burst: { message: '🚨 Pipe burst rupture detected on segment B2 → B3 (major flow surge).', type: 'danger' },
+      demand: { message: 'Consumer demand surge detected in Zone C.', type: 'info' },
+      sensor: { message: 'Suspected sensor fault (false alarm) on segment N1 → B2.', type: 'info' },
+      corrosion: { message: 'Early pipe corrosion watch flagged on segment B2 → B3.', type: 'info' },
+      normal: { message: 'Returned to normal network baseline.', type: 'success' },
+    }
+    const t = toastMap[s] || { message: `Scenario switched to ${s}.`, type: 'info' }
+    setToast(t)
+  }
+
+  const trigger = () => {
+    if (active) {
+      handleScenarioChange('normal')
+    } else {
+      handleScenarioChange(scenario === 'normal' ? 'leak' : scenario)
+    }
   }
 
   const doVerify = async () => {
@@ -1465,7 +1679,7 @@ export default function App() {
   const exportReport = () => {
     const report = {
       timestamp: new Date().toISOString(),
-      activeIncident: active ? incidents[0] : null,
+      activeIncident: active ? (SCENARIO_PROFILES[scenario] || incidents[0]) : null,
       telemetrySnapshot: data,
       systemStatus: active ? 'ALERT' : 'NORMAL',
     }
@@ -1493,20 +1707,25 @@ export default function App() {
     }
     const last = data?.at(-1) ?? {}
     const live = !!ai
-    const hyp = ai?.primaryHypothesis ?? scenario
-    const sev = ai?.severity ?? 'Unknown'
-    const conf = ai?.confidence ?? '—'
-    const seg = ai?.location?.segment ?? '—'
-    const zone = ai?.location?.zone ? `Zone ${ai.location.zone}` : '—'
-    const locConf = ai?.location?.confidence ?? '—'
-    const score = ai?.anomalyScore != null ? Number(ai.anomalyScore).toFixed(2) : '—'
+    const profile = SCENARIO_PROFILES[scenario] || SCENARIO_PROFILES.leak
+    const hyp = ai?.primaryHypothesis ?? profile.primary ?? profile.title
+    const sev = ai?.severity ?? profile.severity ?? 'Unknown'
+    const conf = ai?.confidence ?? profile.confidence ?? '—'
+    const seg = ai?.location?.segment ?? profile.location ?? '—'
+    const zone = ai?.location?.zone ? `Zone ${ai.location.zone}` : profile.zone ?? '—'
+    const locConf = ai?.location?.confidence ?? fallback?.confidence ?? '—'
+    const score = ai?.anomalyScore != null ? Number(ai.anomalyScore).toFixed(2) : (last?.anomalyScore != null ? Number(last.anomalyScore).toFixed(2) : '—')
     const pipe = ai?.pipeCondition ? `${ai.pipeCondition.state} (eddy ${Number(ai.pipeCondition.eddy).toFixed(2)})` : '—'
     const dev = ai?.deviation_pct ?? {}
     const devTxt = (k, unit) => (dev[k] != null ? `${dev[k] >= 0 ? '+' : ''}${Number(dev[k]).toFixed(1)}% ${unit}` : '—')
-    const causeRows = (ai?.causes ?? [])
-      .map((c) => `<tr><td>${esc(c.cause)}</td><td>${esc(c.score)}%</td></tr>`)
+    const causeRows = (ai?.causes ?? profile.causes ?? [])
+      .map((c) => {
+        const cause = Array.isArray(c) ? c[0] : c.cause
+        const score = Array.isArray(c) ? c[1] : c.score
+        return `<tr><td>${esc(cause)}</td><td>${esc(score)}%</td></tr>`
+      })
       .join('') || '<tr><td colspan="2">Ranked causes unavailable offline.</td></tr>'
-    const evidenceItems = (ai?.evidence ?? [])
+    const evidenceItems = (ai?.evidence && ai.evidence.length ? ai.evidence : profile.evidence)
       .map((e) => `<li>${esc(e)}</li>`)
       .join('') || '<li>Evidence unavailable offline.</li>'
     const v = verifyResult
@@ -1521,7 +1740,7 @@ export default function App() {
           })
           .join('')
       : ''
-    const impact = ai?.impact ?? {}
+    const impact = ai?.impact ?? { lossPerHour: profile.lossPerHour, loss24h: profile.loss24h, affectedZone: profile.zone, affectedUsers: profile.zone === 'Zone C' ? 380 : 560 }
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>HydraNexus Incident Report</title><style>
 body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:32px;font-size:12px}
 h1{font-size:20px;margin:0}.sub{color:#555;margin:4px 0 16px}
@@ -1581,15 +1800,24 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
       return (
         <MonitoringPage
           scenario={scenario}
-          setScenario={(s) => {
-            setScenario(s)
-            setActive(s !== 'normal')
-            setVerified(false)
-            setVerifyResult(null)
-          }}
+          setScenario={handleScenarioChange}
         />
       )
-    if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} verifyResult={verifyResult} onExport={exportReport} onExportPDF={exportPDF} data={data} scenario={scenario} setPage={setPage} />
+    if (page === 'incident')
+      return (
+        <InvestigationPage
+          active={active}
+          verify={doVerify}
+          verified={verified}
+          verifyResult={verifyResult}
+          onExport={exportReport}
+          onExportPDF={exportPDF}
+          data={data}
+          scenario={scenario}
+          setScenario={handleScenarioChange}
+          setPage={setPage}
+        />
+      )
     if (page === 'impact') return <ImpactPage active={active} data={data} scenario={scenario} />
     if (page === 'whatif') return <WhatIfPage active={active} data={data} scenario={scenario} />
     if (page === 'history') return <HistoryPage setPage={setPage} />
@@ -1604,7 +1832,15 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
       <div className="lg:flex">
         <Sidebar page={page} setPage={setPage} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} incidentActive={active} />
         <div className="min-w-0 flex-1">
-          <PageHeader title={meta[0]} subtitle={meta[1]} onMenu={() => setMobileOpen(true)} onTrigger={trigger} incidentActive={active} />
+          <PageHeader
+            title={meta[0]}
+            subtitle={meta[1]}
+            onMenu={() => setMobileOpen(true)}
+            onTrigger={trigger}
+            incidentActive={active}
+            scenario={scenario}
+            onScenarioChange={handleScenarioChange}
+          />
           <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
             {render()}
             <footer className="flex flex-col items-center justify-between gap-2 border-t pt-4 text-xs text-muted-foreground sm:flex-row">

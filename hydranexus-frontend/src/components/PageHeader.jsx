@@ -2,7 +2,16 @@ import { Menu, Play, RotateCcw } from 'lucide-react'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 
-export default function PageHeader({ title, subtitle, onMenu, onTrigger, incidentActive }) {
+export default function PageHeader({ title, subtitle, onMenu, onTrigger, incidentActive, scenario = 'normal', onScenarioChange }) {
+  const scenarios = [
+    ['normal', 'Normal baseline'],
+    ['leak', 'Pipeline leak'],
+    ['burst', 'Pipe burst'],
+    ['demand', 'Demand spike'],
+    ['sensor', 'Sensor fault'],
+    ['corrosion', 'Early corrosion'],
+  ]
+
   return (
     <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
@@ -16,6 +25,20 @@ export default function PageHeader({ title, subtitle, onMenu, onTrigger, inciden
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {onScenarioChange && (
+            <select
+              value={scenario}
+              onChange={(e) => onScenarioChange(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
+              aria-label="Simulation scenario"
+            >
+              {scenarios.map(([val, label]) => (
+                <option key={val} value={val}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          )}
           {incidentActive ? (
             <Badge variant="destructive">Incident active</Badge>
           ) : (
