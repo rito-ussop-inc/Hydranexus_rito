@@ -1,12 +1,12 @@
-"""Generate demo CSV telemetry (PRD Phase 1)."""
+"""Generate demo CSV telemetry (PRD Phase 1 + Pipe Health track)."""
 import argparse
 import pandas as pd
-from app.simulator import generate_telemetry
+from app.simulator import generate_telemetry, SCENARIOS
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--scenario", default="leak")
+    ap.add_argument("--scenario", default="leak", choices=list(SCENARIOS))
     ap.add_argument("--points", type=int, default=24)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--out", default="demo_telemetry.csv")

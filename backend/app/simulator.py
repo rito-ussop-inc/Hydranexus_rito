@@ -5,7 +5,8 @@ controlled failure scenarios: leak, burst, demand spike, sensor fault.
 
 Baseline (matches frontend mock):
   flow ≈ 8000 L/hr, pressure ≈ 4.0 bar, consumption ≈ 3000 L/hr,
-  level ≈ 3.2 m (elevated storage tank)
+  level ≈ 3.2 m (elevated storage tank),
+  eddy_current_variance ≈ 0.0 (healthy pipe wall; 1.0 = critical crack)
 """
 from __future__ import annotations
 import math
@@ -16,8 +17,9 @@ BASE_FLOW = 8000.0
 BASE_PRESSURE = 4.0
 BASE_CONSUMPTION = 3000.0
 BASE_LEVEL = 3.2
+BASE_EDDY = 0.0
 
-SCENARIOS = ("normal", "leak", "burst", "demand", "sensor")
+SCENARIOS = ("normal", "leak", "burst", "demand", "sensor", "corrosion")
 
 
 def _time_labels(n: int, start_hour: int = 8) -> list[str]:
@@ -38,6 +40,8 @@ def generate_telemetry(scenario: str = "normal", points: int = 8, seed: int = 7)
     pressure = BASE_PRESSURE + 0.06 * np.cos(2 * np.pi * t / 6.0) + rng.normal(0, 0.05, points)
     consumption = BASE_CONSUMPTION + 60 * np.sin(2 * np.pi * t / 7.0) + rng.normal(0, 55, points)
     level = BASE_LEVEL + 0.08 * np.sin(2 * np.pi * t / 8.0) + rng.normal(0, 0.04, points)
+    # Structural health: healthy pipe wall reads near 0.0 with tiny noise.
+    eddy = np.abs(rng.normal(0, 0.02, points))
 
     # Inject failure in the last third (mirrors frontend data.js which diverges at 13:00-15:00)
     fault_start = max(1, (points * 2) // 3)
@@ -46,32 +50,43 @@ def generate_telemetry(scenario: str = "normal", points: int = 8, seed: int = 7)
 
     if scenario == "leak" and k:
         # +~40% flow, -~0.7 bar pressure, stable consumption, slow tank drain
+        # Physical crack: eddy variance spikes toward 0.85.
         ramp = np.linspace(0.6, 1.0, k)
         flow[idx] += (BASE_FLOW * 0.42) * ramp + rng.normal(0, 80, k)
         pressure[idx] -= 0.75 * ramp + rng.normal(0, 0.03, k) * 0.2
         level[idx] -= 0.55 * ramp
+        eddy[idx] = np.clip(0.85 * ramp + rng.normal(0, 0.03, k), 0.0, 1.0)
     elif scenario == "burst" and k:
         ramp = np.linspace(0.8, 1.0, k)
         flow[idx] += (BASE_FLOW * 0.88) * ramp + rng.normal(0, 120, k)
         pressure[idx] -= 1.65 * ramp
         level[idx] -= 1.25 * ramp
+        eddy[idx] = np.clip(0.92 * ramp + rng.normal(0, 0.03, k), 0.0, 1.0)
     elif scenario == "demand" and k:
         ramp = np.linspace(0.7, 1.0, k)
         consumption[idx] += 1350 * ramp + rng.normal(0, 60, k)
         flow[idx] += 2700 * ramp + rng.normal(0, 90, k)
         pressure[idx] -= 0.32 * ramp
         level[idx] -= 0.75 * ramp
+        # No structural change: healthy wall.
+    elif scenario == "corrosion" and k:
+        # Early degradation: hydraulics stay normal, eddy creeps up gradually
+        # (corrosion without a breach — maintenance warning, not an emergency).
+        ramp = np.linspace(0.0, 1.0, k)
+        eddy[idx] = np.clip(0.15 + 0.40 * ramp + rng.normal(0, 0.02, k), 0.0, 1.0)
+        level[idx] -= 0.10 * ramp
     elif scenario == "sensor" and k:
-        # Single-point spike, pressure + level stable (classic sensor fault signature)
+        # Single-point spike, pressure + level + eddy stable (classic sensor fault signature)
         spike_at = fault_start + (k // 2)
         if spike_at < points:
             flow[spike_at] += 3900
-            # pressure deliberately untouched; consumption untouched; level untouched
+            # pressure deliberately untouched; consumption untouched; level untouched; eddy untouched
 
     flow = np.clip(flow, 1000, 18000)
     pressure = np.clip(pressure, 1.5, 5.0)
     consumption = np.clip(consumption, 800, 7000)
     level = np.clip(level, 0.5, 5.0)
+    eddy = np.clip(eddy, 0.0, 1.0)
 
     # Provisional anomaly score (refined by AI module with IsolationForest)
     scores = []
@@ -91,6 +106,7 @@ def generate_telemetry(scenario: str = "normal", points: int = 8, seed: int = 7)
             "pressure": round(float(pressure[i]), 2),
             "consumption": round(float(consumption[i]), 1),
             "level": round(float(level[i]), 2),
+            "eddy_current_variance": round(float(eddy[i]), 3),
             "anomalyScore": scores[i],
         })
     return out

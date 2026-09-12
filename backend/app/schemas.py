@@ -9,6 +9,7 @@ class TelemetryPoint(BaseModel):
     pressure: float
     consumption: float
     level: Optional[float] = None
+    eddy_current_variance: Optional[float] = Field(default=None, description="0.0 healthy pipe wall, 1.0 critical crack")
     anomalyScore: Optional[float] = 0.0
 
 

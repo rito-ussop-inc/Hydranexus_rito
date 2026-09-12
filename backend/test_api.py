@@ -19,9 +19,21 @@ def test_graph():
 
 
 def test_telemetry_scenarios():
-    for s in ["normal", "leak", "burst", "demand", "sensor"]:
+    for s in ["normal", "leak", "burst", "demand", "sensor", "corrosion"]:
         r = client.get(f"/api/telemetry?scenario={s}&points=8")
         assert r.status_code == 200 and len(r.json()["telemetry"]) == 8
+
+
+def test_eddy_fusion_tracks():
+    leak = generate_telemetry("leak")
+    assert leak[-1]["eddy_current_variance"] >= 0.7  # physical crack
+    burst = generate_telemetry("burst")
+    assert burst[-1]["eddy_current_variance"] >= 0.8
+    sensor = generate_telemetry("sensor", points=8)
+    assert max(p["eddy_current_variance"] for p in sensor) < 0.15  # healthy wall
+    corr = generate_telemetry("corrosion", points=8)
+    assert corr[-1]["eddy_current_variance"] > corr[0]["eddy_current_variance"]  # creeping rise
+    assert abs(corr[-1]["pressure"] - 4.0) < 0.3  # hydraulics normal
 
 
 def test_detect_leak():
