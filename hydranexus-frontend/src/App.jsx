@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar'
 import PageHeader from './components/PageHeader'
 import NetworkMap from './components/NetworkMap'
 import TelemetryCharts from './components/TelemetryCharts'
+import HydraBackground from './components/HydraBackground'
 import { Button } from './components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './components/ui/card'
 import { Badge } from './components/ui/badge'
@@ -1827,9 +1828,10 @@ ${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>O
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="relative min-h-screen bg-background text-foreground">
+      <HydraBackground />
       <Toast toast={toast} onClose={() => setToast(null)} />
-      <div className="lg:flex">
+      <div className="relative z-10 lg:flex">
         <Sidebar page={page} setPage={setPage} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} incidentActive={active} />
         <div className="min-w-0 flex-1">
           <PageHeader
