@@ -96,6 +96,8 @@ def ai_detect(body: DetectRequest):
     try:
         if result.get("severity") in ("HIGH", "MEDIUM") or result.get("primaryHypothesis") == "Early Corrosion":
             import datetime
+            ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+            now_ist = datetime.datetime.now(ist)
             loc = result.get("location", {})
             hyp = result.get("primaryHypothesis", "Leak")
             type_map = {"Confirmed Leak": "Leak", "Confirmed Burst": "Burst",
@@ -114,7 +116,7 @@ def ai_detect(body: DetectRequest):
                 "status": "Investigating",
                 "confidence": result.get("confidence"),
                 "lossPerHour": result.get("impact", {}).get("lossPerHour"),
-                "started": datetime.datetime.utcnow().strftime("%H:%M UTC"),
+                "started": now_ist.strftime("%H:%M IST"),
                 "evidence": result.get("evidence", [])[:6],
                 "eddyVariance": result.get("latest", {}).get("eddy_current_variance"),
                 "pipeState": pipe.get("state"),
