@@ -74,6 +74,10 @@ def test_verify():
     r = client.post("/api/verify", json={"observed": observed, "hypothesis": "leak", "segment": "B2 → B3"})
     j = r.json()
     assert j["matchScore"] > 60 and j["verified"] is True
+    # Corrosion hypothesis is accepted and self-matches.
+    obs_c = generate_telemetry("corrosion")
+    r = client.post("/api/verify", json={"observed": obs_c, "hypothesis": "corrosion", "segment": "B2 → B3"})
+    assert r.json()["hypothesis"] == "corrosion"
 
 
 def test_whatif():
@@ -88,6 +92,9 @@ def test_whatif():
     # Demand has no pipe loss
     r_dem = client.post("/api/whatif", json={"scenario": "isolate", "incident": "demand"})
     assert r_dem.json()["before"]["loss"] == 0 and r_dem.json()["lossReductionPct"] == 0.0
+    # Corrosion watch: no loss yet, inspection note instead of isolation math
+    r_cor = client.post("/api/whatif", json={"scenario": "isolate", "incident": "corrosion"})
+    assert r_cor.json()["before"]["loss"] == 0 and "inspection" in r_cor.json()["notes"].lower()
 
 
 def test_incidents_fallback():

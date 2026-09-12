@@ -95,10 +95,17 @@ def ai_detect(body: DetectRequest):
         if result.get("severity") in ("HIGH", "MEDIUM"):
             import datetime
             loc = result.get("location", {})
+            hyp = result.get("primaryHypothesis", "Leak")
+            type_map = {"Confirmed Leak": "Leak", "Confirmed Burst": "Burst",
+                        "Pipeline Leak": "Leak", "Pipe Burst": "Burst",
+                        "Demand Spike": "Demand", "Sensor Fault": "Sensor",
+                        "Early Corrosion": "Corrosion", "Valve Issue": "Valve",
+                        "Normal Operation": "Normal"}
+            pipe = result.get("pipeCondition", {})
             incident_db.save_incident({
                 "id": f"INC-{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
-                "title": f"Probable {result.get('primaryHypothesis', 'anomaly').lower()}",
-                "type": result.get("primaryHypothesis", "Leak").split()[-1],
+                "title": f"Probable {hyp.lower()}",
+                "type": type_map.get(hyp, "Leak"),
                 "location": loc.get("segment", "B2 → B3"),
                 "zone": f"Zone {loc.get('zone', 'B')}",
                 "severity": result.get("severity"),
@@ -107,6 +114,8 @@ def ai_detect(body: DetectRequest):
                 "lossPerHour": result.get("impact", {}).get("lossPerHour"),
                 "started": datetime.datetime.utcnow().strftime("%H:%M UTC"),
                 "evidence": result.get("evidence", [])[:6],
+                "eddyVariance": result.get("latest", {}).get("eddy_current_variance"),
+                "pipeState": pipe.get("state"),
             })
     except Exception:
         pass
@@ -126,7 +135,9 @@ def impact(scenario: str = Query(default="leak"), points: int = Query(default=8,
     data = generate_telemetry(scenario=scenario, points=points)
     result = analyze(data)
     return {"scenario": scenario.lower(), "impact": result["impact"], "severity": result["severity"],
-            "location": result["location"], "evidence": result["evidence"]}
+            "location": result["location"], "evidence": result["evidence"],
+            "pipeCondition": result["pipeCondition"],
+            "primaryHypothesis": result["primaryHypothesis"]}
 
 
 WHATIF_CATALOG = {
@@ -156,7 +167,7 @@ def verify(body: VerifyRequest):
     Returns evidence strength (0..100). High score => observed matches hypothesis.
     """
     hypothesis = (body.hypothesis or "leak").lower()
-    if hypothesis not in ("leak", "burst", "demand", "sensor", "normal"):
+    if hypothesis not in ("leak", "burst", "demand", "sensor", "corrosion", "normal"):
         hypothesis = "leak"
     observed = [p.model_dump() for p in body.observed]
     if len(observed) < 3:
@@ -198,9 +209,10 @@ def whatif(body: WhatIfRequest):
         raise HTTPException(status_code=400, detail=f"unknown scenario '{key}'. Choose {sorted(WHATIF_CATALOG)}")
     incident = (body.incident or "leak").lower()
     # Baseline loss per incident type; frontend may override with live estimate.
-    # Demand / sensor / normal have no pipe loss by definition — ignore any passed baseline.
-    incident_defaults = {"leak": 3500, "burst": 7000, "demand": 0, "sensor": 0, "normal": 0}
-    if incident in ("demand", "sensor", "normal"):
+    # Demand / sensor / corrosion / normal have no pipe loss by definition.
+    incident_defaults = {"leak": 3500, "burst": 7000, "demand": 0, "sensor": 0,
+                         "corrosion": 0, "normal": 0}
+    if incident in ("demand", "sensor", "corrosion", "normal"):
         base = 0.0
     elif body.baselineLoss is not None:
         base = max(0.0, float(body.baselineLoss))
@@ -210,14 +222,21 @@ def whatif(body: WhatIfRequest):
     scale = base / 3500.0 if base > 0 else 0.0
     before = {**item["before"], "loss": round(base)}
     if base <= 0:
-        # No pipe loss (demand spike / sensor fault): interventions save no water.
+        # No pipe loss: interventions save no water.
         after = {**item["after"], "loss": 0}
-        notes = (
-            f"No pipe water-loss for '{incident}' — metered use or sensor error, not leakage. "
-            f"{item['label']} would disrupt {item['after']['users']} users with 0 L/hr saved. Monitoring recommended."
-            if item["after"]["users"] > 0 else
-            f"No pipe water-loss for '{incident}'. {item['label']} saves 0 L/hr. Monitoring recommended."
-        )
+        if incident == "corrosion":
+            notes = (
+                "Wall degradation without a breach — no water loss yet. "
+                f"{item['label']} would disrupt {item['after']['users']} users with 0 L/hr saved. "
+                "Schedule inspection instead of isolation."
+            )
+        else:
+            notes = (
+                f"No pipe water-loss for '{incident}' — metered use or sensor error, not leakage. "
+                f"{item['label']} would disrupt {item['after']['users']} users with 0 L/hr saved. Monitoring recommended."
+                if item["after"]["users"] > 0 else
+                f"No pipe water-loss for '{incident}'. {item['label']} saves 0 L/hr. Monitoring recommended."
+            )
         return {
             "scenario": key,
             "incident": incident,

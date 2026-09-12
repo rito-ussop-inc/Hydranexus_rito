@@ -51,6 +51,8 @@ def row_to_incident(row: dict) -> dict:
         "confidence": row.get("confidence"),
         "lossPerHour": row.get("loss_per_hour"),
         "evidence": row.get("evidence") or [],
+        "eddyVariance": row.get("eddy_variance"),
+        "pipeState": row.get("pipe_state"),
     }
 
 
@@ -67,24 +69,37 @@ def get_incidents(limit: int = 50) -> list[dict] | None:
 
 
 def save_incident(item: dict) -> bool:
-    """Upsert one incident FIR. Never raises — returns False on any failure."""
+    """Upsert one incident FIR. Never raises — returns False on any failure.
+
+    The eddy_variance / pipe_state columns exist after the Step-3 SQL migration;
+    if the table predates them, retry without those columns so old DBs keep working.
+    """
     c = client()
     if c is None:
         return False
+    row = {
+        "id": item.get("id"),
+        "title": item.get("title"),
+        "type": item.get("type"),
+        "location": item.get("location"),
+        "zone": item.get("zone"),
+        "severity": item.get("severity"),
+        "status": item.get("status", "Investigating"),
+        "confidence": item.get("confidence"),
+        "loss_per_hour": item.get("lossPerHour"),
+        "started": item.get("started"),
+        "evidence": item.get("evidence") or [],
+        "eddy_variance": item.get("eddyVariance"),
+        "pipe_state": item.get("pipeState"),
+    }
     try:
-        row = {
-            "id": item.get("id"),
-            "title": item.get("title"),
-            "type": item.get("type"),
-            "location": item.get("location"),
-            "zone": item.get("zone"),
-            "severity": item.get("severity"),
-            "status": item.get("status", "Investigating"),
-            "confidence": item.get("confidence"),
-            "loss_per_hour": item.get("lossPerHour"),
-            "started": item.get("started"),
-            "evidence": item.get("evidence") or [],
-        }
+        c.table("incidents").upsert(row, on_conflict="id").execute()
+        return True
+    except Exception:
+        pass
+    try:
+        row.pop("eddy_variance", None)
+        row.pop("pipe_state", None)
         c.table("incidents").upsert(row, on_conflict="id").execute()
         return True
     except Exception:
