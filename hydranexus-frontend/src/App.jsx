@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { CheckCircle2, AlertTriangle, Download, Play, X } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, Download, FileText, Play, X } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import PageHeader from './components/PageHeader'
 import NetworkMap from './components/NetworkMap'
@@ -403,7 +403,7 @@ function MonitoringPage({ scenario, setScenario }) {
 
 /* ------------------------------ Investigation ---------------------------- */
 
-function InvestigationPage({ active, verify, verified, verifyResult, onExport, data, scenario }) {
+function InvestigationPage({ active, verify, verified, verifyResult, onExport, onExportPDF, data, scenario }) {
   const fallback = incidents[0]
   const [ai, setAi] = useState(null)
   const [live, setLive] = useState(false)
@@ -552,6 +552,9 @@ function InvestigationPage({ active, verify, verified, verifyResult, onExport, d
             <div className="flex gap-2">
               <Button size="sm" variant={verified ? 'secondary' : 'default'} onClick={verify}>
                 {verified ? 'Verified' : 'Verify scenario'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={onExportPDF}>
+                <FileText /> Export PDF
               </Button>
               <Button size="sm" variant="outline" onClick={onExport}>
                 <Download /> Export JSON
@@ -1280,6 +1283,100 @@ export default function App() {
     setToast({ message: 'Incident report exported.', type: 'success' })
   }
 
+  const exportPDF = async () => {
+    if (!active) {
+      setToast({ message: 'No active incident to report.', type: 'info' })
+      return
+    }
+    const esc = (v) => String(v ?? '—').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    let ai = null
+    try {
+      ai = await postDetect(data)
+    } catch {
+      ai = null
+    }
+    const last = data?.at(-1) ?? {}
+    const live = !!ai
+    const hyp = ai?.primaryHypothesis ?? scenario
+    const sev = ai?.severity ?? 'Unknown'
+    const conf = ai?.confidence ?? '—'
+    const seg = ai?.location?.segment ?? '—'
+    const zone = ai?.location?.zone ? `Zone ${ai.location.zone}` : '—'
+    const locConf = ai?.location?.confidence ?? '—'
+    const score = ai?.anomalyScore != null ? Number(ai.anomalyScore).toFixed(2) : '—'
+    const pipe = ai?.pipeCondition ? `${ai.pipeCondition.state} (eddy ${Number(ai.pipeCondition.eddy).toFixed(2)})` : '—'
+    const dev = ai?.deviation_pct ?? {}
+    const devTxt = (k, unit) => (dev[k] != null ? `${dev[k] >= 0 ? '+' : ''}${Number(dev[k]).toFixed(1)}% ${unit}` : '—')
+    const causeRows = (ai?.causes ?? [])
+      .map((c) => `<tr><td>${esc(c.cause)}</td><td>${esc(c.score)}%</td></tr>`)
+      .join('') || '<tr><td colspan="2">Ranked causes unavailable offline.</td></tr>'
+    const evidenceItems = (ai?.evidence ?? [])
+      .map((e) => `<li>${esc(e)}</li>`)
+      .join('') || '<li>Evidence unavailable offline.</li>'
+    const v = verifyResult
+    const verifySection = v
+      ? `<p>Hypothesis <strong>${esc(v.hypothesis)}</strong> at ${esc(v.segment)} — match ${esc(v.matchScore)}% (${esc(v.evidenceStrength)}), ${v.verified ? 'SUPPORTED' : 'WEAK'}.</p><p>${esc(v.explanation)}</p>`
+      : '<p>Scenario verification was not run for this report.</p>'
+    const simRows = v?.simulated
+      ? v.simulated
+          .map((s, i) => {
+            const o = data?.[i]
+            return `<tr><td>${esc(o?.time ?? s.time)}</td><td>${o ? fmt(o.flow) : '—'}</td><td>${fmt(s.flow)}</td></tr>`
+          })
+          .join('')
+      : ''
+    const impact = ai?.impact ?? {}
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>HydraNexus Incident Report</title><style>
+body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:32px;font-size:12px}
+h1{font-size:20px;margin:0}.sub{color:#555;margin:4px 0 16px}
+h2{font-size:14px;border-bottom:1px solid #999;padding-bottom:4px;margin-top:20px}
+table{width:100%;border-collapse:collapse;margin-top:8px}
+th,td{border:1px solid #bbb;padding:5px 7px;text-align:left;vertical-align:top}
+th{background:#eee}.meta{color:#555;font-size:11px;margin-top:16px}ol{margin:8px 0;padding-left:20px}li{margin-bottom:4px}
+</style></head><body>
+<h1>HydraNexus — Incident Report</h1>
+<p class="sub">Generated ${esc(new Date().toLocaleString())} · Scenario: ${esc(scenario)} · Source: ${live ? 'live AI backend' : 'local feed (backend unreachable)'} · Demo data — simulated telemetry, no live sensors.</p>
+<h2>1. Incident snapshot</h2>
+<table><tr><th>Field</th><th>Value</th></tr>
+<tr><td>Status</td><td>Investigating</td></tr>
+<tr><td>Primary hypothesis</td><td>${esc(hyp)}</td></tr>
+<tr><td>Severity</td><td>${esc(sev)}</td></tr>
+<tr><td>Confidence</td><td>${esc(conf)}${conf === '—' ? '' : '%'}</td></tr>
+<tr><td>Probable location</td><td>${esc(seg)} · ${esc(zone)} (${esc(locConf)}${locConf === '—' ? '' : '%'} confidence)</td></tr>
+<tr><td>ML anomaly score</td><td>${esc(score)}</td></tr>
+<tr><td>Pipe condition</td><td>${esc(pipe)}</td></tr></table>
+<h2>2. Latest telemetry (${esc(last.time ?? '—')})</h2>
+<table><tr><th>Signal</th><th>Reading</th><th>Deviation vs baseline</th></tr>
+<tr><td>Flow</td><td>${last.flow != null ? `${fmt(last.flow)} L/hr` : '—'}</td><td>${esc(devTxt('flow', ''))}</td></tr>
+<tr><td>Pressure</td><td>${last.pressure != null ? `${Number(last.pressure).toFixed(2)} bar` : '—'}</td><td>${esc(devTxt('pressure', ''))}</td></tr>
+<tr><td>Consumption</td><td>${last.consumption != null ? `${fmt(last.consumption)} L/hr` : '—'}</td><td>${esc(devTxt('consumption', ''))}</td></tr>
+<tr><td>Tank level</td><td>${last.level != null ? `${Number(last.level).toFixed(2)} m` : '—'}</td><td>${esc(devTxt('level', ''))}</td></tr>
+<tr><td>Eddy-current variance</td><td>${last.eddy_current_variance != null ? Number(last.eddy_current_variance).toFixed(3) : '—'}</td><td>0 healthy · 1 crack</td></tr></table>
+<h2>3. Ranked causes</h2>
+<table><tr><th>Cause</th><th>Score</th></tr>${causeRows}</table>
+<h2>4. Evidence</h2><ol>${evidenceItems}</ol>
+<h2>5. Scenario verification</h2>${verifySection}
+${simRows ? `<h2>6. Observed vs simulated flow</h2><table><tr><th>Time</th><th>Observed (L/hr)</th><th>Simulated (L/hr)</th></tr>${simRows}</table>` : ''}
+<h2>${simRows ? '7' : '6'}. Impact</h2>
+<table><tr><th>Field</th><th>Value</th></tr>
+<tr><td>Estimated loss</td><td>${impact.lossPerHour != null ? `${fmt(Math.round(impact.lossPerHour))} L/hr` : '—'}</td></tr>
+<tr><td>24-hour projection</td><td>${impact.loss24h != null ? `${fmt(Math.round(impact.loss24h))} L` : '—'}</td></tr>
+<tr><td>Affected zone / users</td><td>${esc(impact.affectedZone ?? zone)} / ${impact.affectedUsers != null ? fmt(impact.affectedUsers) : '—'}</td></tr></table>
+<p>${esc(ai?.operatorNote ?? 'Advisory output only.')}</p>
+<p class="meta">HydraNexus MVP · Decision support only — a qualified operator reviews evidence and remains accountable for any intervention. Do not connect this demo to live control hardware.</p>
+</body></html>`
+    const win = window.open('', '_blank', 'width=960,height=720')
+    if (!win) {
+      setToast({ message: 'Popup blocked — allow popups to export PDF.', type: 'danger' })
+      return
+    }
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    setTimeout(() => win.print(), 350)
+    setToast({ message: 'Report ready — choose Save as PDF in the print dialog.', type: 'success' })
+  }
+
   const meta = pageMeta[page]
   const render = () => {
     if (page === 'overview') return <Overview active={active} data={data} scenario={scenario} setPage={setPage} trigger={trigger} onExport={exportReport} />
@@ -1296,7 +1393,7 @@ export default function App() {
           }}
         />
       )
-    if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} verifyResult={verifyResult} onExport={exportReport} data={data} scenario={scenario} />
+    if (page === 'incident') return <InvestigationPage active={active} verify={doVerify} verified={verified} verifyResult={verifyResult} onExport={exportReport} onExportPDF={exportPDF} data={data} scenario={scenario} />
     if (page === 'impact') return <ImpactPage active={active} data={data} scenario={scenario} />
     if (page === 'whatif') return <WhatIfPage active={active} data={data} scenario={scenario} />
     if (page === 'history') return <HistoryPage setPage={setPage} />
